@@ -174,13 +174,74 @@ class CaseBundle(BaseModel):
                 "relevant_build_files": (
                     self.structural.relevant_build_files if self.structural else []
                 ),
+                "version_catalog": (
+                    self.structural.version_catalog if self.structural else {}
+                ),
             },
         }
 
     def repair_context(self, top_k: int = 5) -> dict:
-        """Evidence dict for the RepairAgent — restricted to localized files."""
+        """Evidence dict for the RepairAgent — restricted to localized files.
+
+        When a top-k localized file participates in an expect/actual pair, its
+        counterparts (the ``actual_files`` or the ``expect_file``) are appended
+        to ``localized_files`` even if they fall outside the top-k ranking.
+        This ensures the RepairAgent always has both sides of a KMP contract in
+        context and does not generate half-patched expect/actual mismatches.
+        """
         localized = self.localized_files(top_k)
+
+        # ── Expect/actual coupling ──────────────────────────────────────────
+        # Build a lookup: each file → its coupled counterparts.
+        if self.structural and self.structural.expect_actual_pairs:
+            coupled: set[str] = set()
+            localized_set = set(localized)
+            for pair in self.structural.expect_actual_pairs:
+                if pair.expect_file in localized_set:
+                    # A localized expect file — include all its actual counterparts
+                    coupled.update(pair.actual_files)
+                elif any(f in localized_set for f in pair.actual_files):
+                    # A localized actual file — include the expect declaration
+                    coupled.add(pair.expect_file)
+            # Append newly-discovered coupled files (preserve order, no duplicates)
+            for f in coupled:
+                if f not in localized_set:
+                    localized = localized + [f]
         errors = self.execution.all_errors("after") if self.execution else []
+
+        # Collect ALL required Kotlin versions from KLIB_ABI_ERROR and JVM
+        # metadata errors, then take the MAXIMUM.  Multiple libraries may
+        # demand different minimum Kotlin versions:
+        #   koin 4.1.0  → produced by Kotlin 2.1.20  (min required = 2.1.20)
+        #   ktor 3.4.1  → JVM metadata says binary=2.3.0  (min required = 2.3.0)
+        # The correct `kotlin` alias target is max(2.1.20, 2.3.0) = "2.3.0".
+        # Taking only the FIRST is wrong when multiple libraries conflict.
+        required_kotlin_version: Optional[str] = _max_kotlin_version(
+            [getattr(e, "required_kotlin_version", None) for e in errors]
+        )
+
+        # Build a cascade conflict map: library → version it requires.
+        # This lets the agent see ALL constraints at once, not just the max.
+        # Example: {"koin-core-iosArm64Main": "2.1.20", "ktor-client-core-jvm": "2.3.0"}
+        kotlin_cascade: dict[str, str] = {}
+        for e in errors:
+            ver = getattr(e, "required_kotlin_version", None)
+            if ver and e.message:
+                # Extract a short library name from the message for display
+                import re as _re
+                m = _re.search(r"'([\w.-]+-jvm|[\w.-]+iosArm64Main|[\w.-]+Main)[-/]", e.message)
+                if m:
+                    kotlin_cascade[m.group(1)] = ver
+                elif ver not in kotlin_cascade.values():
+                    kotlin_cascade[f"lib_{len(kotlin_cascade)}"] = ver
+
+        # ── Catalog diff (alias renames + artifact renames) ────────────────
+        catalog_alias_diff: dict = {}
+        artifact_renames: list[dict] = []
+        if self.update_evidence:
+            catalog_alias_diff = self.update_evidence.catalog_alias_diff or {}
+            artifact_renames = self.update_evidence.artifact_renames or []
+
         return {
             "update": self.update_evidence.model_dump() if self.update_evidence else {},
             "localized_files": localized,
@@ -189,6 +250,23 @@ class CaseBundle(BaseModel):
                 {"attempt": p.attempt_number, "status": p.status, "reason": p.retry_reason}
                 for p in (self.repair.patch_attempts if self.repair else [])
             ],
+            # Parsed version catalog from libs.versions.toml — key tool for
+            # detecting Kotlin ABI incompatibilities and other version-bump fixes.
+            "version_catalog": (
+                self.structural.version_catalog if self.structural else {}
+            ),
+            # MAX required Kotlin version across all KLIB + JVM metadata errors.
+            # This is the version to bump `kotlin` TO — the minimum that satisfies
+            # all library constraints simultaneously.
+            "required_kotlin_version": required_kotlin_version,
+            # Full cascade map: library → required Kotlin version (for transparency).
+            # Lets the agent understand the multi-library constraint landscape.
+            "kotlin_cascade_constraints": kotlin_cascade,
+            # Catalog structural changes: alias renames and artifact module changes.
+            # These are invisible to the agent without a before/after diff since
+            # they surface as "Unresolved reference" errors with no direct fix hint.
+            "catalog_alias_diff": catalog_alias_diff,
+            "artifact_renames": artifact_renames,
         }
 
     def explanation_context(self) -> dict:
@@ -220,3 +298,34 @@ class CaseBundle(BaseModel):
                 self.validation.model_dump() if self.validation else {}
             ),
         }
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers
+# ---------------------------------------------------------------------------
+
+
+def _max_kotlin_version(versions: list[Optional[str]]) -> Optional[str]:
+    """Return the semantically highest Kotlin version from a list, ignoring None.
+
+    Kotlin versions follow PEP-440/semver conventions (e.g. "2.3.0", "2.1.20").
+    We compare as tuples of ints so "2.1.20" > "2.1.9" and "2.3.0" > "2.1.20".
+
+    When multiple libraries impose different minimum Kotlin requirements, the
+    project must satisfy the HIGHEST constraint to be compatible with all of
+    them.  Example:
+        koin 4.1.0  → required_kotlin_version = "2.1.20"
+        ktor 3.4.1  → required_kotlin_version = "2.3.0"
+        max("2.1.20", "2.3.0") = "2.3.0"  ← the version to bump `kotlin` to.
+    """
+    candidates: list[str] = [v for v in versions if v]
+    if not candidates:
+        return None
+
+    def _semver(v: str) -> tuple[int, ...]:
+        try:
+            return tuple(int(x) for x in v.split("."))
+        except ValueError:
+            return (0,)
+
+    return max(candidates, key=_semver)

@@ -122,6 +122,15 @@ def analyze_case(
     # --- Build file lists -------------------------------------------------
     relevant_build_files = _find_build_files(after_path)
 
+    # --- Parse version catalog -------------------------------------------
+    version_catalog = _parse_version_catalog(after_path)
+    if version_catalog:
+        log.info(
+            "Case %s: version catalog has %d entries (kotlin=%s)",
+            case_id[:8], len(version_catalog),
+            version_catalog.get("kotlin", "not found"),
+        )
+
     total_impacted = len(merged.impacted_files) if merged else 0
 
     # --- Persist to DB ---------------------------------------------------
@@ -136,6 +145,7 @@ def analyze_case(
         expect_actual_pairs=all_pairs,
         direct_import_files=list(all_direct_import_files),
         relevant_build_files=relevant_build_files,
+        version_catalog=version_catalog,
         total_kotlin_files=total_kotlin_files,
     )
 
@@ -218,6 +228,52 @@ def _merge_graphs(graphs: list[ImpactGraph]) -> ImpactGraph | None:
         total_project_files=base.total_project_files,
         total_impacted=len(merged_impacted),
     )
+
+
+def _parse_version_catalog(repo: Path) -> dict[str, str]:
+    """Parse gradle/libs.versions.toml and return the [versions] section.
+
+    Returns a dict of alias → version string (e.g. {"kotlin": "2.2.0", ...}).
+    Returns an empty dict when no version catalog is found or parsing fails.
+
+    This is a lightweight TOML parser for the [versions] section only — it
+    handles the common `key = "value"` format without a full TOML dependency.
+    """
+    candidates = [
+        repo / "gradle" / "libs.versions.toml",
+        repo / "libs.versions.toml",
+    ]
+    toml_path: Path | None = None
+    for c in candidates:
+        if c.exists():
+            toml_path = c
+            break
+
+    if toml_path is None:
+        return {}
+
+    try:
+        text = toml_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+
+    versions: dict[str, str] = {}
+    in_versions_section = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            in_versions_section = stripped.startswith("[versions]")
+            continue
+        if not in_versions_section:
+            continue
+        if "=" in stripped and not stripped.startswith("#"):
+            key, _, val = stripped.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and val:
+                versions[key] = val
+
+    return versions
 
 
 def _find_build_files(repo: Path) -> list[str]:

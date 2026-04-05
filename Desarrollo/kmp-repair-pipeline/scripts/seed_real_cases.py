@@ -139,6 +139,7 @@ def main() -> None:
                 repository_id=repo.id,
                 update_class=spec["update_class"],
                 pr_ref=spec["pr_ref"],
+                pr_title=spec.get("title"),
                 source="dependabot_pr",
             )
 

@@ -100,6 +100,17 @@ def localize(
     )
     log.info("Deterministic scoring: %d candidates", len(scored))
 
+    # Priority injection: when KLIB_ABI_ERROR or JVM metadata errors are
+    # present, `gradle/libs.versions.toml` is always the primary fix target.
+    # The static import-graph has no edges to build files, so deterministic
+    # scoring will never surface it.  We inject it as rank-0 with score=1.0
+    # so that Hit@k and RepairAgent always see it first.
+    scored = _inject_version_catalog_candidate(
+        scored=scored,
+        error_observations=error_obs,
+        after_workspace=_after_workspace_path(bundle, case_id, session),
+    )
+
     # --- Step 2: LocalizationAgent (optional) ----------------------------
     result_candidates: list[LocalizationResult.Candidate]
     used_agent = False
@@ -161,7 +172,10 @@ def localize(
     result_candidates = result_candidates[:top_k]
 
     # --- Step 3: Persist localization_candidates --------------------------
+    # Delete any candidates from previous runs to prevent stale accumulation
+    # across reruns; each localize call is authoritative for the case.
     cand_repo = LocalizationCandidateRepo(session)
+    cand_repo.delete_for_case(case_id)
     for cand in result_candidates:
         cand_repo.create(
             repair_case_id=case_id,
@@ -265,6 +279,72 @@ def _resolve_static_signals(
             bundle.structural.direct_import_files = direct_imports
 
     return merged, direct_imports
+
+
+def _after_workspace_path(
+    bundle: CaseBundle,
+    case_id: str,
+    session: Session,
+) -> Optional[str]:
+    """Return the local path of the after-workspace revision, or None."""
+    rev = RevisionRepo(session).get(case_id, "after")
+    return rev.local_path if rev else None
+
+
+def _inject_version_catalog_candidate(
+    scored: list[ScoredCandidate],
+    error_observations: list,
+    after_workspace: Optional[str],
+) -> list[ScoredCandidate]:
+    """Inject gradle/libs.versions.toml as rank-0 candidate when version errors exist.
+
+    The static impact graph has no edges to build files — it operates on
+    Kotlin source imports only.  This means `libs.versions.toml` is never
+    surfaced by deterministic scoring even though it is the PRIMARY fix target
+    for KLIB_ABI_ERROR and JVM metadata version incompatibilities.
+
+    Design:
+    - We inject it only when version-related errors are present.
+    - It is inserted at position 0 (highest rank) with score = 1.0.
+    - This ensures Hit@1 is reachable for KLIB/metadata cases, and that the
+      RepairAgent always receives the build file first.
+    - If it already appears in the scored list (edge case), we skip injection.
+    """
+    has_version_error = any(
+        getattr(e, "error_type", "") == "KLIB_ABI_ERROR"
+        for e in error_observations
+    )
+    if not has_version_error:
+        return scored
+
+    # Build the canonical path for libs.versions.toml
+    catalog_path = "gradle/libs.versions.toml"
+    if after_workspace:
+        from pathlib import Path as _Path
+        full = str(_Path(after_workspace) / catalog_path)
+        if _Path(full).exists():
+            catalog_path = full
+
+    # Skip if already present
+    for sc in scored:
+        if sc.file_path.endswith("libs.versions.toml"):
+            return scored
+
+    catalog_candidate = ScoredCandidate(
+        file_path=catalog_path,
+        final_score=1.0,
+        static_score=1.0,
+        dynamic_score=1.0,
+        classification="build_level",
+        source_set="build",
+        score_breakdown={
+            "reason": "Injected: KLIB_ABI_ERROR or JVM metadata version incompatibility "
+                      "detected — libs.versions.toml is the primary fix target for "
+                      "kotlin version bumps.",
+        },
+    )
+
+    return [catalog_candidate] + list(scored)
 
 
 def _merge_graphs(graphs: list[ImpactGraph]) -> ImpactGraph | None:

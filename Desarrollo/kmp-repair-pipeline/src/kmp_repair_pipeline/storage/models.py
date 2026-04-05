@@ -89,6 +89,7 @@ class DependencyEvent(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     repository_id: Mapped[str] = mapped_column(String(36), ForeignKey("repositories.id"), nullable=False)
     pr_ref: Mapped[str | None] = mapped_column(String(255))
+    pr_title: Mapped[str | None] = mapped_column(Text)  # e.g. "Bump ktor from 3.1.3 to 3.4.1"
     update_class: Mapped[str] = mapped_column(String(64), nullable=False)  # UpdateClass enum value
     raw_diff: Mapped[str | None] = mapped_column(Text)
     raw_diff_path: Mapped[str | None] = mapped_column(Text)
@@ -245,6 +246,13 @@ class ErrorObservation(Base):
     raw_text: Mapped[str | None] = mapped_column(Text)
     # Provenance: which parser extracted this
     parser: Mapped[str] = mapped_column(String(64), default="regex")
+    # Populated for KLIB_ABI_ERROR when the compiler w: warning line reveals the
+    # exact Kotlin version that produced the incompatible KLIB.  Enables the
+    # RepairAgent to emit the correct bump target without guessing.
+    required_kotlin_version: Mapped[str | None] = mapped_column(String(32))
+    # Populated for API_BREAK_ERROR: the unresolved symbol extracted from the
+    # "Unresolved reference: Foo" compiler message.
+    symbol_name: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     task_result: Mapped[TaskResult] = relationship(back_populates="error_observations")
@@ -471,6 +479,7 @@ class EvaluationMetric(Base):
     ctsr: Mapped[float | None] = mapped_column(Float)
     ffsr: Mapped[float | None] = mapped_column(Float)
     efr: Mapped[float | None] = mapped_column(Float)
+    efr_normalized: Mapped[float | None] = mapped_column(Float)   # message-dedup EFR (no line number)
     # Localization Hit@k
     hit_at_1: Mapped[float | None] = mapped_column(Float)
     hit_at_3: Mapped[float | None] = mapped_column(Float)

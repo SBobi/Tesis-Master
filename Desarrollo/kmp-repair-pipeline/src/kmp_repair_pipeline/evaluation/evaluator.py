@@ -97,17 +97,25 @@ def evaluate(
     results: list[CaseMetrics] = []
 
     for repair_mode, attempt_row in by_mode.items():
-        # Remaining errors = errors from validation runs for this attempt
-        remaining_errors = _load_remaining_errors(
-            attempt_row.id, session
-        )
+        # Load remaining errors FIRST (from ValidationRun task results).
+        # This call must precede _load_validation_for_patch so that the two
+        # DB calls happen in a deterministic, test-friendly order.
+        remaining_errors_from_db = _load_remaining_errors(attempt_row.id, session)
 
-        # Validation evidence scoped to this attempt's ValidationRun rows
+        # Validation evidence scoped to this attempt's ValidationRun rows.
         validation = _load_validation_for_patch(
             patch_attempt_id=attempt_row.id,
             patch_attempt_number=attempt_row.attempt_number,
             session=session,
         )
+
+        # When validation is None (patch FAILED_APPLY, never validated), treat
+        # remaining errors as equal to the original set so EFR = 0.0, not 1.0.
+        # "No validation run" is not the same as "all errors fixed."
+        if validation is None:
+            remaining_errors = original_errors
+        else:
+            remaining_errors = remaining_errors_from_db
 
         m = compute_metrics(
             case_id=case_id,
@@ -127,6 +135,7 @@ def evaluate(
             ctsr=m.ctsr,
             ffsr=m.ffsr,
             efr=m.efr,
+            efr_normalized=m.efr_normalized,
             hit_at_1=m.hit_at_1,
             hit_at_3=m.hit_at_3,
             hit_at_5=m.hit_at_5,

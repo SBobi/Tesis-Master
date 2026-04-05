@@ -116,6 +116,7 @@ def from_db_case(case_id: str, session: Session) -> Optional[CaseBundle]:
             repo_url=repo.url,
             repo_local_path="",
             pr_ref=event.pr_ref,
+            pr_title=getattr(event, "pr_title", None),
             version_changes=version_changes,
             update_class=UpdateClass(event.update_class),
         ),
@@ -145,6 +146,7 @@ def from_db_case(case_id: str, session: Session) -> Optional[CaseBundle]:
                         message=e.message,
                         raw_text=e.raw_text,
                         parser=e.parser,
+                        required_kotlin_version=getattr(e, "required_kotlin_version", None),
                     )
                     for e in errors
                 ]
@@ -270,11 +272,21 @@ def from_db_case(case_id: str, session: Session) -> Optional[CaseBundle]:
             ))
 
     # Validation evidence
+    # Look for validation runs across ALL patch attempts for this case,
+    # not just the last one — each baseline mode runs independently and
+    # only the APPLIED/REJECTED attempt has validation records.
     validation_ev: Optional[ValidationEvidence] = None
-    if patch_db_records:
-        last_patch = patch_db_records[-1]
-        vrun_records = ValidationRunRepo(session).list_for_patch(last_patch.id)
-        if vrun_records:
+    all_vruns = ValidationRunRepo(session).list_for_case(case_id)
+    if all_vruns:
+        # Find the patch attempt that was validated
+        vrun_patch_id = all_vruns[0].patch_attempt_id
+        validated_patch = next(
+            (p for p in patch_db_records if p.id == vrun_patch_id),
+            patch_db_records[-1] if patch_db_records else None,
+        )
+        last_patch = validated_patch
+        vrun_records = all_vruns
+        if True:
             validation_ev = ValidationEvidence(
                 target_results=[
                     TargetValidation(

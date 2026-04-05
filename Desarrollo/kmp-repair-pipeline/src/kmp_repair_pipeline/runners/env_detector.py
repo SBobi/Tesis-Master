@@ -95,8 +95,12 @@ def detect(repo_path: Path | str) -> EnvProfile:
 
     _detect_java(profile)
     _detect_gradlew(profile, repo)
-    _detect_android_sdk(profile)
+    _detect_android_sdk(profile, repo)
     _detect_xcode(profile)
+    # Ensure local.properties carries sdk.dir so Gradle can find the Android SDK
+    # even without ANDROID_HOME in the shell environment.
+    if profile.android_sdk_available and profile.android_sdk_root:
+        _write_local_properties(repo, profile.android_sdk_root)
     _compute_runnable_targets(profile)
 
     log.info(
@@ -173,7 +177,7 @@ def _detect_gradlew(profile: EnvProfile, repo: Path) -> None:
         log.debug("gradlew --version failed: %s", exc)
 
 
-def _detect_android_sdk(profile: EnvProfile) -> None:
+def _detect_android_sdk(profile: EnvProfile, repo: Path | None = None) -> None:
     sdk_root = (
         os.environ.get("ANDROID_HOME")
         or os.environ.get("ANDROID_SDK_ROOT")
@@ -184,6 +188,12 @@ def _detect_android_sdk(profile: EnvProfile) -> None:
         default = Path.home() / "Library" / "Android" / "sdk"
         if default.exists():
             sdk_root = str(default)
+
+    # Android also supports sdk.dir in local.properties at the repo root.
+    # Gradle reads this file automatically — we do the same so the pipeline
+    # can resolve the SDK path even when environment variables are not set.
+    if not sdk_root and repo is not None:
+        sdk_root = _read_sdk_dir_from_local_properties(repo)
 
     if not sdk_root or not Path(sdk_root).exists():
         log.info("Android SDK not found")
@@ -217,6 +227,62 @@ def _detect_xcode(profile: EnvProfile) -> None:
             profile.xcode_version = first_line.strip()
     except Exception as exc:
         log.debug("xcodebuild version check failed: %s", exc)
+
+
+def _read_sdk_dir_from_local_properties(repo: Path) -> str:
+    """Read sdk.dir from local.properties at the project root.
+
+    Gradle reads this file automatically when ANDROID_HOME is not set.
+    The pipeline mirrors this behaviour so the env detector can resolve
+    the SDK path the same way Gradle would during an actual build.
+
+    Returns the path string if found and non-empty, otherwise "".
+    """
+    local_props = repo / "local.properties"
+    if not local_props.exists():
+        return ""
+    try:
+        for line in local_props.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("sdk.dir="):
+                sdk_dir = line.split("=", 1)[1].strip()
+                if sdk_dir:
+                    log.info("Android SDK from local.properties: %s", sdk_dir)
+                    return sdk_dir
+    except OSError as exc:
+        log.debug("Could not read local.properties: %s", exc)
+    return ""
+
+
+def _write_local_properties(repo: Path, sdk_root: str) -> None:
+    """Write or update local.properties with sdk.dir for Gradle.
+
+    Called by the pipeline when ANDROID_HOME is set but local.properties
+    is absent or has a stale sdk.dir value.  This is the standard way to
+    configure the Android SDK path for projects that don't commit
+    local.properties (most do not — it is gitignored by default).
+
+    Only writes if the current value differs from `sdk_root` to avoid
+    unnecessary git dirtiness.
+    """
+    local_props = repo / "local.properties"
+    target_line = f"sdk.dir={sdk_root}"
+
+    if local_props.exists():
+        content = local_props.read_text(encoding="utf-8")
+        # Already has the correct value — no-op
+        if f"sdk.dir={sdk_root}" in content:
+            return
+        # Update existing sdk.dir line
+        import re as _re
+        updated = _re.sub(r"^sdk\.dir=.*$", target_line, content, flags=_re.MULTILINE)
+        if "sdk.dir=" not in updated:
+            updated = updated.rstrip("\n") + "\n" + target_line + "\n"
+        local_props.write_text(updated, encoding="utf-8")
+    else:
+        local_props.write_text(target_line + "\n", encoding="utf-8")
+
+    log.info("Wrote sdk.dir to %s", local_props)
 
 
 def _compute_runnable_targets(profile: EnvProfile) -> None:

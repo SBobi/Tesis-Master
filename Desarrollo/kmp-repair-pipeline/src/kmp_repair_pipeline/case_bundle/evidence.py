@@ -37,6 +37,11 @@ class UpdateEvidence(BaseModel):
     # Provenance
     detected_at: Optional[datetime] = None
     detection_source: str = "manual"   # "dependabot_pr" | "toml_diff" | "manual"
+    # Catalog diff — populated when before/after libs.versions.toml are available.
+    # alias_renames: list of {before_alias, after_alias, module} — alias was renamed
+    # artifact_renames: list of {alias, before_module, after_module} — artifact changed
+    catalog_alias_diff: dict = Field(default_factory=dict)
+    artifact_renames: list[dict] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +70,14 @@ class ErrorObservation(BaseModel):
     message: Optional[str] = None
     raw_text: Optional[str] = None
     parser: str = "regex"
+    # Populated for KLIB_ABI_ERROR when the compiler w: warning line reveals the
+    # exact Kotlin version that produced the incompatible KLIB.  RepairAgent uses
+    # this to emit the correct target version rather than guessing from context.
+    required_kotlin_version: Optional[str] = None
+    # Populated for API_BREAK_ERROR: the unresolved symbol name extracted from
+    # the "Unresolved reference: Foo" or "Type mismatch: inferred type is Foo"
+    # compiler message.  Lets the RepairAgent identify the exact API that changed.
+    symbol_name: Optional[str] = None
 
 
 class RevisionExecution(BaseModel):
@@ -134,6 +147,9 @@ class StructuralEvidence(BaseModel):
     direct_import_files: list[str] = Field(default_factory=list)
     # Build-level configuration files relevant to the update
     relevant_build_files: list[str] = Field(default_factory=list)
+    # Parsed version catalog from gradle/libs.versions.toml (key → version string).
+    # Populated by structural_builder; used by RepairAgent for version-bump fixes.
+    version_catalog: dict[str, str] = Field(default_factory=dict)
     total_kotlin_files: int = 0
 
 
@@ -192,9 +208,19 @@ class RepairEvidence(BaseModel):
     patch_attempts: list[PatchAttempt] = Field(default_factory=list)
 
     def latest_patch(self) -> Optional[PatchAttempt]:
+        """Return the most recently created patch attempt.
+
+        Prefers a patch that was validated (REJECTED or VALIDATED status),
+        since that's the most informative for the ExplanationAgent.
+        Falls back to the last attempt in list order (ordered by created_at).
+        """
         if not self.patch_attempts:
             return None
-        return max(self.patch_attempts, key=lambda p: p.attempt_number)
+        # Prefer validated/rejected (has validation signal) over failed-apply
+        for p in reversed(self.patch_attempts):
+            if p.status in ("VALIDATED", "REJECTED", "APPLIED"):
+                return p
+        return self.patch_attempts[-1]
 
     def accepted_patch(self) -> Optional[PatchAttempt]:
         for p in reversed(self.patch_attempts):

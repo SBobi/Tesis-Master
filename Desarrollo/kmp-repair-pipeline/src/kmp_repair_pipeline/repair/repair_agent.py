@@ -44,6 +44,21 @@ Rules:
    - Do not move shared code to platform-specific source sets.
 5. If you cannot produce a correct patch, output exactly: PATCH_IMPOSSIBLE
 6. If you need to change multiple files, include all of them in one diff.
+
+CRITICAL — Build-file fixes:
+7. Errors of type KLIB_ABI_ERROR mean the library's Kotlin/Native KLIB was
+   compiled with a different Kotlin version than the project uses.  The fix is
+   almost always to update the `kotlin` version alias in
+   gradle/libs.versions.toml — NOT to edit .kt source files.
+   Example fix for a KLIB_ABI_ERROR:
+     --- a/gradle/libs.versions.toml
+     +++ b/gradle/libs.versions.toml
+     @@ -1,5 +1,5 @@
+      [versions]
+     -kotlin = "2.2.0"
+     +kotlin = "2.3.0"
+8. Always check the Current Version Catalog section in the prompt before
+   deciding whether a build-file version bump fixes the error.
 """
 
 _FORCE_PATCH_APPENDIX = """\
@@ -147,19 +162,28 @@ def _build_prompt(
 
 
 def _prompt_raw_error(context: dict, attempt: int) -> str:
-    """Minimal baseline: only dependency diff + raw compiler errors."""
+    """Minimal baseline: dependency diff + raw compiler errors only.
+
+    No file content — tests whether error messages alone suffice.
+    """
     update = context.get("update", {})
     errors = context.get("errors", [])
+    required_kotlin = context.get("required_kotlin_version")
+    cascade = context.get("kotlin_cascade_constraints", {})
+    version_catalog = context.get("version_catalog", {})
     vcs = update.get("version_changes", [])
+    pr_title = update.get("update_event", {}).get("pr_title") or ""
     vc_lines = "\n".join(
         f"  {v.get('dependency_group', '?')}: {v.get('before', '?')} → {v.get('after', '?')}"
         for v in vcs
     )
     error_lines = _format_errors(errors)
+    pr_line = f"PR: {pr_title}\n" if pr_title else ""
+    kotlin_section = _format_required_kotlin_version(required_kotlin, cascade, version_catalog)
     return f"""\
 ## Dependency Update (attempt {attempt})
-{vc_lines or "  (unknown)"}
-
+{pr_line}{vc_lines or "  (unknown)"}
+{kotlin_section}
 ## Compiler Errors
 {error_lines}
 
@@ -168,39 +192,60 @@ Produce a unified diff to fix these errors.
 
 
 def _prompt_context_rich(context: dict, attempt: int) -> str:
-    """Richer baseline: adds localized files and source-set info."""
+    """Richer baseline: adds localized files, source-set info, and file contents."""
     update = context.get("update", {})
     errors = context.get("errors", [])
     localized = context.get("localized_files", [])
+    required_kotlin = context.get("required_kotlin_version")
+    cascade = context.get("kotlin_cascade_constraints", {})
+    file_contents: dict[str, str] = context.get("file_contents", {})
+    build_file_contents: dict[str, str] = context.get("build_file_contents", {})
+    version_catalog: dict[str, str] = context.get("version_catalog", {})
     vcs = update.get("version_changes", [])
+    pr_title = update.get("update_event", {}).get("pr_title") or ""
     vc_lines = "\n".join(
         f"  {v.get('dependency_group', '?')}: {v.get('before', '?')} → {v.get('after', '?')}"
         for v in vcs
     )
     error_lines = _format_errors(errors)
     file_list = "\n".join(f"  - {f}" for f in localized[:15]) or "  (none identified)"
+    file_content_section = _format_file_contents(file_contents, build_file_contents)
+    catalog_section = _format_version_catalog(version_catalog)
+    kotlin_section = _format_required_kotlin_version(required_kotlin, cascade, version_catalog)
+    pr_line = f"PR: {pr_title}\n" if pr_title else ""
     return f"""\
 ## Dependency Update (attempt {attempt})
-{vc_lines or "  (unknown)"}
+{pr_line}{vc_lines or "  (unknown)"}
 Update class: {update.get("update_class", "?")}
-
+{kotlin_section}{catalog_section}
 ## Compiler Errors
 {error_lines}
 
 ## Files Most Likely Needing Changes
 {file_list}
-
+{file_content_section}
 Produce a unified diff to fix these errors, focusing on the files listed above.
+CRITICAL: Use the EXACT content shown in the file sections above.
+  - The diff context lines MUST match the actual file content character-for-character.
+  - Never invent old values — only change lines that appear verbatim in the shown content.
+  - For libs.versions.toml: the current kotlin value is shown in the Version Catalog above.
+If any error is KLIB_ABI_ERROR, update the `kotlin` version in gradle/libs.versions.toml.
 """
 
 
 def _prompt_full_thesis(context: dict, attempt: int) -> str:
-    """Full thesis prompt: all evidence including previous attempts."""
+    """Full thesis prompt: all evidence including previous attempts and file contents."""
     update = context.get("update", {})
     errors = context.get("errors", [])
     localized = context.get("localized_files", [])
     previous = context.get("previous_attempts", [])
+    required_kotlin = context.get("required_kotlin_version")
+    cascade = context.get("kotlin_cascade_constraints", {})
+    file_contents: dict[str, str] = context.get("file_contents", {})
+    build_file_contents: dict[str, str] = context.get("build_file_contents", {})
+    version_catalog: dict[str, str] = context.get("version_catalog", {})
     vcs = update.get("version_changes", [])
+    pr_title = update.get("update_event", {}).get("pr_title") or ""
 
     vc_lines = "\n".join(
         f"  {v.get('dependency_group', '?')}: {v.get('before', '?')} → {v.get('after', '?')}"
@@ -208,6 +253,10 @@ def _prompt_full_thesis(context: dict, attempt: int) -> str:
     )
     error_lines = _format_errors(errors)
     file_list = "\n".join(f"  - {f}" for f in localized[:15]) or "  (none identified)"
+    file_content_section = _format_file_contents(file_contents, build_file_contents)
+    catalog_section = _format_version_catalog(version_catalog)
+    kotlin_section = _format_required_kotlin_version(required_kotlin, cascade, version_catalog)
+    pr_line = f"PR: {pr_title}\n" if pr_title else ""
 
     previous_section = ""
     if previous:
@@ -220,23 +269,117 @@ def _prompt_full_thesis(context: dict, attempt: int) -> str:
 
     return f"""\
 ## Dependency Update (attempt {attempt})
-{vc_lines or "  (unknown)"}
+{pr_line}{vc_lines or "  (unknown)"}
 Update class: {update.get("update_class", "?")}
-
+{kotlin_section}{catalog_section}
 ## Compilation/Test Errors
 {error_lines}
 
 ## Localized Files (ranked by impact score)
 {file_list}
-{previous_section}
-Produce a unified diff that fixes ALL listed errors. \
-Respect KMP source-set boundaries (expect/actual symmetry).
+{file_content_section}{previous_section}
+Produce a unified diff that fixes ALL listed errors.
+Rules:
+1. Respect KMP source-set boundaries (expect/actual symmetry).
+2. CRITICAL — Use EXACT file content: every context line in your diff MUST match
+   the file content shown above verbatim. Never invent lines that are not in the
+   shown content. If you are unsure of a line, omit it from the diff context.
+3. For gradle/libs.versions.toml: the Required Kotlin Version block above shows the
+   EXACT current value and target. Use those values for the -/+ diff lines.
+4. For each source file you modify: copy the exact import/code lines from the
+   "Source Files" section above — do not guess or reconstruct from memory.
+5. If any error is KLIB_ABI_ERROR or JVM metadata incompatibility, the PRIMARY fix
+   is the kotlin version bump in gradle/libs.versions.toml.
 """
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _format_required_kotlin_version(
+    required_version: str | None,
+    cascade: dict | None = None,
+    version_catalog: dict | None = None,
+) -> str:
+    """Render a high-priority block when the exact required Kotlin version is known.
+
+    `required_version` is the MAX across all KLIB warnings (w: lines) and JVM
+    metadata errors.  Using the max guarantees all libraries are satisfied.
+    `cascade` shows each library's constraint so the agent can reason about it.
+    `version_catalog` provides the ACTUAL current value of `kotlin` so the diff
+    context line is precise (no hallucination of old values).
+    """
+    if not required_version:
+        return ""
+
+    current_kotlin = (version_catalog or {}).get("kotlin", "?")
+    lines = [
+        "## !! REQUIRED KOTLIN VERSION (extracted from compiler output) !!",
+        f"  Current value in gradle/libs.versions.toml: kotlin = \"{current_kotlin}\"",
+        f"  Required value (max across all library constraints): kotlin = \"{required_version}\"",
+        f"  You MUST change: -kotlin = \"{current_kotlin}\"  →  +kotlin = \"{required_version}\"",
+        "  Direction: UPWARD only — do NOT downgrade kotlin.",
+    ]
+    if cascade:
+        lines.append("  Library-level constraints (all must be satisfied):")
+        for lib, ver in sorted(cascade.items()):
+            marker = " ← MAX (use this)" if ver == required_version else ""
+            lines.append(f"    {lib}: requires Kotlin >= {ver}{marker}")
+    lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def _format_version_catalog(catalog: dict[str, str]) -> str:
+    """Format the parsed libs.versions.toml [versions] section for the prompt.
+
+    Highlights key KMP-related entries (kotlin, agp, compose, etc.) so the
+    agent immediately sees which version may need to be bumped.
+    """
+    if not catalog:
+        return ""
+
+    # Key aliases that the agent should pay special attention to
+    _KEY_ALIASES = {
+        "kotlin", "kotlinx-coroutines", "kotlinx-serialization",
+        "agp", "compose", "compose-multiplatform", "compose-bom",
+        "ksp", "ktor", "coil", "koin", "room", "sqldelight",
+        "navigation", "lifecycle", "jetpack",
+    }
+
+    lines = ["## Current Version Catalog (gradle/libs.versions.toml [versions])"]
+    for key, val in sorted(catalog.items()):
+        marker = " ★" if any(k in key.lower() for k in _KEY_ALIASES) else ""
+        lines.append(f"  {key} = \"{val}\"{marker}")
+    lines.append(
+        "  (★ = KMP-critical alias — may need updating for ABI/API compatibility)"
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _format_file_contents(
+    file_contents: dict[str, str],
+    build_file_contents: dict[str, str],
+) -> str:
+    """Format file contents as a prompt section with code blocks."""
+    parts: list[str] = []
+
+    if build_file_contents:
+        parts.append("\n## Build Files (check these for version/dependency fixes)")
+        for path, content in build_file_contents.items():
+            # Show only the filename for readability in the prompt
+            short = path.split("/")[-1] if "/" in path else path
+            parts.append(f"\n### {short}\n```\n{content}\n```")
+
+    if file_contents:
+        parts.append("\n## Source Files (current content)")
+        for path, content in file_contents.items():
+            short = path.split("/")[-1] if "/" in path else path
+            lang = "kotlin" if path.endswith(".kt") else ""
+            parts.append(f"\n### {short}\n```{lang}\n{content}\n```")
+
+    return "\n".join(parts) if parts else ""
 
 
 def _format_errors(errors: list[dict]) -> str:

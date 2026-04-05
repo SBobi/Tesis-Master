@@ -53,6 +53,16 @@ class DependencyGraph:
             f"{sum(len(v) for v in self._imports_from.values())} edges, "
             f"{len(seeds)} seeds"
         )
+        if not seeds and parse_results:
+            log.warning(
+                "No seed files found importing prefix %r. "
+                "This can happen when the Maven group ID ('%s') does not match the "
+                "Kotlin import namespace used by the library (e.g. 'io.insert-koin' "
+                "ships imports under 'org.koin.*'). "
+                "Localization will proceed with zero static signal — "
+                "consider adding a group-to-namespace mapping for this dependency.",
+                dep_prefix, dependency_group,
+            )
         return seeds
 
     def _resolve_import(

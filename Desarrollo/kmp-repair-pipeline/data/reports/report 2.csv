@@ -1,0 +1,5 @@
+case_id,repair_mode,case_status,repo_url,pr_ref,update_class,bsr,ctsr,ffsr,efr,hit_at_1,hit_at_3,hit_at_5,source_set_accuracy
+3d497cbd-a732-4c59-95fc-86ade5c88be1,context_rich,EVALUATED,https://github.com/estebancastelblanco/kmp-production-sample-impact-demo,pull/1,direct_library,0.0,0.0,0.0,0.0,,,,
+3d497cbd-a732-4c59-95fc-86ade5c88be1,full_thesis,EVALUATED,https://github.com/estebancastelblanco/kmp-production-sample-impact-demo,pull/1,direct_library,0.0,0.0,0.0,0.0,,,,
+3d497cbd-a732-4c59-95fc-86ade5c88be1,iterative_agentic,EVALUATED,https://github.com/estebancastelblanco/kmp-production-sample-impact-demo,pull/1,direct_library,0.0,0.0,0.0,0.0,,,,
+3d497cbd-a732-4c59-95fc-86ade5c88be1,raw_error,EVALUATED,https://github.com/estebancastelblanco/kmp-production-sample-impact-demo,pull/1,direct_library,0.0,0.0,0.0,0.0,,,,

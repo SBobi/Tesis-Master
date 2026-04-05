@@ -86,7 +86,7 @@ def explain(
     artifact_store = ArtifactStore(artifact_base, case_id)
     agent_log_repo = AgentLogRepo(session)
 
-    call_index = len(agent_log_repo.list_for_case(case_id))
+    call_index = _next_agent_call_index(case_id, session)
     prompt_path, prompt_sha = artifact_store.write_prompt(AGENT_TYPE, call_index, agent_out.prompt)
     response_path, response_sha = artifact_store.write_response(
         AGENT_TYPE, call_index, agent_out.response.content
@@ -161,3 +161,20 @@ def explain(
         tokens_in=agent_out.response.tokens_in,
         tokens_out=agent_out.response.tokens_out,
     )
+
+
+def _next_agent_call_index(case_id: str, session: Session) -> int:
+    """Return the next sequential call index for ExplanationAgent logs.
+
+    Uses per-agent-type counting to be consistent with LocalizationAgent and
+    RepairAgent (which also count only their own prior calls, not global ones).
+    """
+    from sqlalchemy import select, func
+    from ..storage.models import AgentLog
+
+    stmt = select(func.count()).where(
+        AgentLog.repair_case_id == case_id,
+        AgentLog.agent_type == AGENT_TYPE,
+    )
+    count = session.scalar(stmt) or 0
+    return count

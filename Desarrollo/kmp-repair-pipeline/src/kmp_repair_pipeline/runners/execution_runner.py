@@ -235,6 +235,8 @@ def _run_revision(
         profile=profile_name,
         env_metadata=env_metadata,
     )
+    exec_run.started_at = datetime.now(timezone.utc)
+    session.flush()
 
     task_outcomes: list[TaskOutcome] = []
     all_errors: list[EvidenceError] = []
@@ -279,6 +281,7 @@ def _run_revision(
                     message=err.message,
                     raw_text=err.raw_text,
                     parser=err.parser,
+                    required_kotlin_version=getattr(err, "required_kotlin_version", None),
                 )
 
             # Build TaskOutcome for the bundle
@@ -301,12 +304,14 @@ def _run_revision(
                     message=e.message,
                     raw_text=e.raw_text,
                     parser=e.parser,
+                    required_kotlin_version=getattr(e, "required_kotlin_version", None),
                 )
                 for e in gr.error_observations
             )
 
-    # Update execution_run timestamps
+    # Update execution_run timestamps and aggregate status
     exec_run.ended_at = datetime.now(timezone.utc)
+    exec_run.status = _aggregate_status(task_outcomes)
     session.flush()
 
     return task_outcomes, all_errors

@@ -59,6 +59,7 @@ class CaseMetrics:
     ctsr: float
     ffsr: float
     efr: Optional[float]             # None when no original errors exist
+    efr_normalized: Optional[float]  # EFR with message-only dedup key (no line number)
     hit_at_1: Optional[float]
     hit_at_3: Optional[float]
     hit_at_5: Optional[float]
@@ -109,6 +110,20 @@ def compute_efr(
 ) -> Optional[float]:
     """Fraction of original errors eliminated.
 
+    Uses a penalty-adjusted formula so that patches which replace N original
+    errors with M > N new errors do not score EFR=1.0 (all "fixed") when the
+    build is clearly more broken than before.
+
+    Formula:
+      raw_efr   = (|original| - |original ∩ remaining|) / |original|
+      new_errors = max(0, |remaining| - |original|)
+      penalty   = new_errors / |original|
+      EFR       = max(0, raw_efr - penalty)
+
+    This ensures that introducing more errors than were fixed pushes EFR to 0
+    even when the original specific error keys no longer appear verbatim (e.g.
+    because a wrong version bump changed KLIB errors into classpath errors).
+
     Returns None when there are no original errors.
     """
     if not original_errors:
@@ -116,7 +131,13 @@ def compute_efr(
     original_keys = {_error_key(e) for e in original_errors}
     remaining_keys = {_error_key(e) for e in remaining_errors}
     fixed = original_keys - remaining_keys
-    return round(len(fixed) / len(original_keys), 4)
+    raw_efr = len(fixed) / len(original_keys)
+
+    # Penalty for introducing new errors beyond what was fixed
+    new_error_count = max(0, len(remaining_errors) - len(original_errors))
+    penalty = new_error_count / len(original_errors)
+
+    return round(max(0.0, raw_efr - penalty), 4)
 
 
 def compute_hit_at_k(
@@ -206,6 +227,7 @@ def compute_metrics(
         ctsr=compute_ctsr(validation),
         ffsr=compute_ffsr(validation),
         efr=compute_efr(original_errors, remaining_errors),
+        efr_normalized=compute_efr_message_normalized(original_errors, remaining_errors),
         hit_at_1=compute_hit_at_k(candidate_paths, ground_truth_files or [], 1),
         hit_at_3=compute_hit_at_k(candidate_paths, ground_truth_files or [], 3),
         hit_at_5=compute_hit_at_k(candidate_paths, ground_truth_files or [], 5),
@@ -221,10 +243,55 @@ def compute_metrics(
 
 
 def _error_key(e: ErrorObservation) -> tuple:
-    """Deduplication key: (type, file, line, message)."""
+    """Deduplication key: (type, file, line, message).
+
+    Includes the line number so that two identical messages on different lines
+    are counted as different errors.  This can *overcount* fixed errors when a
+    patch moves an error to a different line without actually eliminating it.
+    Use ``_error_key_normalized`` for a line-agnostic alternative.
+    """
     return (
         getattr(e, "error_type", ""),
         getattr(e, "file_path", ""),
         getattr(e, "line", None),
         getattr(e, "message", ""),
     )
+
+
+def _error_key_normalized(e: ErrorObservation) -> tuple:
+    """Message-normalized dedup key: (type, file, message) — no line number.
+
+    Prevents the line-number shift false-positive: if a patch moves an error
+    from line 42 to line 45 but does not fix it, ``_error_key`` counts it as
+    fixed while ``_error_key_normalized`` does not.  Gives a more conservative
+    (lower-bound) EFR estimate that is harder to game with cosmetic changes.
+    """
+    return (
+        getattr(e, "error_type", ""),
+        getattr(e, "file_path", ""),
+        getattr(e, "message", ""),
+    )
+
+
+def compute_efr_message_normalized(
+    original_errors: list[ErrorObservation],
+    remaining_errors: list[ErrorObservation],
+) -> Optional[float]:
+    """EFR variant using message-only dedup key (no line number).
+
+    Otherwise identical in formula to ``compute_efr``:
+      EFR_normalized = max(0, raw_efr_norm - penalty)
+
+    Returns None when there are no original errors.
+    """
+    if not original_errors:
+        return None
+    original_keys = {_error_key_normalized(e) for e in original_errors}
+    remaining_keys = {_error_key_normalized(e) for e in remaining_errors}
+    fixed = original_keys - remaining_keys
+    raw_efr = len(fixed) / len(original_keys)
+
+    new_error_count = max(0, len(remaining_errors) - len(original_errors))
+    penalty = new_error_count / len(original_errors)
+
+    return round(max(0.0, raw_efr - penalty), 4)

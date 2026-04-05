@@ -77,6 +77,7 @@ class DependencyEventRepo:
         repository_id: str,
         update_class: str,
         pr_ref: str | None = None,
+        pr_title: str | None = None,
         raw_diff: str | None = None,
         source: str = "manual",
     ) -> DependencyEvent:
@@ -84,6 +85,7 @@ class DependencyEventRepo:
             repository_id=repository_id,
             update_class=update_class,
             pr_ref=pr_ref,
+            pr_title=pr_title,
             raw_diff=raw_diff,
             source=source,
         )
@@ -297,6 +299,8 @@ class ErrorObservationRepo:
         message: str | None = None,
         raw_text: str | None = None,
         parser: str = "regex",
+        required_kotlin_version: str | None = None,
+        symbol_name: str | None = None,
     ) -> ErrorObservation:
         obs = ErrorObservation(
             task_result_id=task_result_id,
@@ -307,6 +311,8 @@ class ErrorObservationRepo:
             message=message,
             raw_text=raw_text,
             parser=parser,
+            required_kotlin_version=required_kotlin_version,
+            symbol_name=symbol_name,
         )
         self._s.add(obs)
         self._s.flush()
@@ -398,6 +404,16 @@ class LocalizationCandidateRepo:
         ).order_by(LocalizationCandidate.rank)
         return list(self._s.scalars(stmt).all())
 
+    def delete_for_case(self, repair_case_id: str) -> int:
+        """Delete all localization candidates for a case. Returns number deleted."""
+        from sqlalchemy import delete as sql_delete
+        stmt = sql_delete(LocalizationCandidate).where(
+            LocalizationCandidate.repair_case_id == repair_case_id
+        )
+        result = self._s.execute(stmt)
+        self._s.flush()
+        return result.rowcount
+
 
 # ---------------------------------------------------------------------------
 # PatchAttemptRepo
@@ -429,9 +445,12 @@ class PatchAttemptRepo:
         return self._s.get(PatchAttempt, id)
 
     def list_for_case(self, repair_case_id: str) -> list[PatchAttempt]:
+        # Order by created_at so that insertion order is deterministic regardless
+        # of attempt_number collisions across different repair modes (each mode
+        # restarts from attempt_number=1, making attempt_number alone ambiguous).
         stmt = select(PatchAttempt).where(
             PatchAttempt.repair_case_id == repair_case_id
-        ).order_by(PatchAttempt.attempt_number)
+        ).order_by(PatchAttempt.created_at, PatchAttempt.attempt_number)
         return list(self._s.scalars(stmt).all())
 
 
@@ -467,6 +486,16 @@ class ValidationRunRepo:
 
     def list_for_patch(self, patch_attempt_id: str) -> list[ValidationRun]:
         stmt = select(ValidationRun).where(ValidationRun.patch_attempt_id == patch_attempt_id)
+        return list(self._s.scalars(stmt).all())
+
+    def list_for_case(self, repair_case_id: str) -> list[ValidationRun]:
+        """Return all validation runs for a case, ordered by creation time."""
+        from ..storage.models import ValidationRun as VRModel
+        stmt = (
+            select(ValidationRun)
+            .where(ValidationRun.repair_case_id == repair_case_id)
+            .order_by(ValidationRun.created_at)
+        )
         return list(self._s.scalars(stmt).all())
 
 

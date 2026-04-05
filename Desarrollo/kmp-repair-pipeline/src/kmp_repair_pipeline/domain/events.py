@@ -37,6 +37,10 @@ class DependencyUpdateEvent(BaseModel):
     repo_url: str
     repo_local_path: str = ""
     pr_ref: Optional[str] = None
+    # Human-readable PR title from Dependabot or manual seed — e.g.
+    # "Bump ktor from 3.1.3 to 3.4.1".  Surfaced in repair prompts so the
+    # RepairAgent sees the original intent of the update.
+    pr_title: Optional[str] = None
     version_changes: list[VersionChange] = Field(default_factory=list)
     update_class: UpdateClass = UpdateClass.UNKNOWN
     raw_diff: str = ""

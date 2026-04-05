@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from ..case_bundle.bundle import CaseBundle
 from ..case_bundle.evidence import PatchAttempt
 from ..case_bundle.serialization import from_db_case, to_db
-from ..repair.patch_applier import apply_patch, extract_touched_files
+from ..repair.patch_applier import apply_patch, extract_touched_files, revert_patch
 from ..repair.repair_agent import AGENT_TYPE, AgentRepairOutput, run_repair_agent
 from ..storage.artifact_store import ArtifactStore
 from ..storage.repositories import (
@@ -39,6 +39,7 @@ from ..storage.repositories import (
 )
 from ..utils.llm_provider import LLMProvider, get_default_provider
 from ..utils.log import get_logger
+from ..utils.workspace_lock import WorkspaceLock
 
 log = get_logger(__name__)
 
@@ -121,8 +122,61 @@ def repair(
     artifact_store = ArtifactStore(artifact_base, case_id)
     llm = provider or get_default_provider()
 
+    # Acquire workspace lock — prevents concurrent repair/validate from
+    # corrupting the git workspace with interleaved patch operations.
+    with WorkspaceLock(after_path):
+        return _repair_inner(
+            case_id=case_id,
+            session=session,
+            bundle=bundle,
+            after_path=after_path,
+            artifact_store=artifact_store,
+            llm=llm,
+            attempt_number=attempt_number,
+            repair_mode=repair_mode,
+            patch_strategy=patch_strategy,
+            force_patch_attempt=force_patch_attempt,
+            top_k=top_k,
+        )
+
+
+def _repair_inner(
+    case_id: str,
+    session,
+    bundle,
+    after_path: Path,
+    artifact_store,
+    llm,
+    attempt_number: int,
+    repair_mode: str,
+    patch_strategy: str,
+    force_patch_attempt: bool,
+    top_k: int = 5,
+) -> "RepairRunResult":
+    """Core repair logic — runs inside the workspace lock."""
     # Build repair context
     ctx = bundle.repair_context(top_k=top_k)
+
+    # Enrich context with actual file contents so the agent can generate
+    # valid unified diffs (correct line numbers and context lines).
+    ctx["file_contents"] = _read_file_contents(ctx.get("localized_files", []))
+
+    # Build files — libs.versions.toml goes FIRST so the agent sees it before
+    # source files.  This is the primary fix target for version-bump repairs
+    # (KLIB ABI errors, AGP upgrades, etc.).
+    build_files: list[str] = []
+    # Prioritise libs.versions.toml
+    for toml_rel in ("gradle/libs.versions.toml", "libs.versions.toml"):
+        toml_abs = after_path / toml_rel
+        if toml_abs.exists():
+            build_files.append(str(toml_abs))
+            break
+    if bundle.structural and bundle.structural.relevant_build_files:
+        for rel in bundle.structural.relevant_build_files:
+            abs_p = after_path / rel
+            if abs_p.exists() and str(abs_p) not in build_files:
+                build_files.append(str(abs_p))
+    ctx["build_file_contents"] = _read_file_contents(build_files)
 
     # --- Agent call -------------------------------------------------------
     agent_out: AgentRepairOutput = run_repair_agent(
@@ -454,8 +508,43 @@ def _split_diff_by_file(diff_text: str) -> list[str]:
     return rendered
 
 
+def _read_file_contents(paths: list[str], max_bytes: int = 8000) -> dict[str, str]:
+    """Read file contents for context injection into repair prompts.
+
+    Truncates large files to `max_bytes` to stay within token budgets.
+    Returns a dict of path → content (skips unreadable files silently).
+    When truncation occurs, the size information is logged and appended to the
+    content so the agent knows it is working with a partial view.
+    """
+    contents: dict[str, str] = {}
+    for p in paths:
+        try:
+            text = Path(p).read_text(encoding="utf-8", errors="replace")
+            total_bytes = len(text.encode("utf-8"))
+            if total_bytes > max_bytes:
+                # Truncate on UTF-8 boundary to avoid mid-character cut
+                encoded = text.encode("utf-8")[:max_bytes]
+                text = encoded.decode("utf-8", errors="ignore")
+                log.info(
+                    "Truncating %s for repair prompt: %d bytes total, showing first %d bytes",
+                    Path(p).name, total_bytes, max_bytes,
+                )
+                text = (
+                    text
+                    + f"\n... [truncated: showing {max_bytes} of {total_bytes} bytes]"
+                )
+            contents[p] = text
+        except OSError:
+            pass
+    return contents
+
+
 def _apply_patch_chain_by_file(diff_text: str, after_path: Path):
-    """Apply diff file-by-file in sequence, stopping on first failure."""
+    """Apply diff file-by-file in sequence, stopping on first failure.
+
+    On partial failure, reverts all previously applied blocks in reverse order
+    so the workspace is left in a clean state relative to the pre-attempt state.
+    """
     from ..repair.patch_applier import PatchApplicationResult
 
     blocks = _split_diff_by_file(diff_text)
@@ -466,6 +555,7 @@ def _apply_patch_chain_by_file(diff_text: str, after_path: Path):
     rejected_union: list[str] = []
     last_stderr = ""
     method = "patch"
+    applied_blocks: list[str] = []   # blocks successfully applied so far
 
     for idx, block in enumerate(blocks, start=1):
         result = apply_patch(block, after_path)
@@ -480,6 +570,14 @@ def _apply_patch_chain_by_file(diff_text: str, after_path: Path):
                 rejected_union.append(f)
 
         if not result.success:
+            # Roll back all previously applied blocks (reverse order)
+            for prev_block in reversed(applied_blocks):
+                rev = revert_patch(prev_block, after_path)
+                if not rev.success:
+                    log.warning(
+                        "chain_by_file rollback failed for a block — workspace may be dirty: %s",
+                        rev.stderr[:120],
+                    )
             return PatchApplicationResult(
                 success=False,
                 touched_files=touched_union,
@@ -488,6 +586,8 @@ def _apply_patch_chain_by_file(diff_text: str, after_path: Path):
                 stderr=f"chain_by_file failed at block {idx}/{len(blocks)}: {last_stderr}",
                 method=method,
             )
+
+        applied_blocks.append(block)
 
     return PatchApplicationResult(
         success=True,

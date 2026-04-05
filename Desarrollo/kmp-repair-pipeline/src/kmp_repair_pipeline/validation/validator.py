@@ -16,6 +16,7 @@ No re-cloning or patch reversal is performed here.
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -122,6 +123,9 @@ def validate(
             f"Case {case_id}: after-clone not available — run `build-case` first"
         )
     repo_path = Path(after_rev.local_path)
+
+    # ── Pre-validation patch presence check ────────────────────────────────
+    _verify_patch_present(repo_path, attempt_row)
 
     # ── Environment detection ───────────────────────────────────────────────
     env = detect(repo_path)
@@ -299,6 +303,8 @@ def _run_target(
                 message=err.message,
                 raw_text=err.raw_text,
                 parser=err.parser,
+                required_kotlin_version=getattr(err, "required_kotlin_version", None),
+                symbol_name=getattr(err, "symbol_name", None),
             )
 
         task_outcomes.append(TaskOutcome(
@@ -326,6 +332,63 @@ def _run_target(
 
     exec_run.ended_at = datetime.now(timezone.utc)
     return task_outcomes, all_errors, exec_run.id
+
+
+def _verify_patch_present(repo_path: Path, attempt_row) -> None:
+    """Warn if the patch no longer appears to be applied to the workspace.
+
+    Compares ``attempt_row.touched_files`` against the list of files that git
+    reports as modified (unstaged changes).  When none of the expected files
+    appear in ``git diff --name-only``, validation would silently run against
+    the unpatched code — this check surfaces that before it happens.
+
+    This is a **non-blocking** check: a warning is emitted but validation
+    continues regardless.  Blocking would require defining "present" more
+    precisely than a simple file-list intersection, and could produce false
+    positives for patches that only add new files.
+    """
+    touched: list[str] = attempt_row.touched_files or []
+    if not touched:
+        log.debug(
+            "Patch presence check skipped — attempt #%d has no touched_files recorded",
+            attempt_row.attempt_number,
+        )
+        return
+
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only"],
+            capture_output=True,
+            text=True,
+            cwd=str(repo_path),
+            timeout=15,
+        )
+        if result.returncode != 0:
+            log.warning(
+                "Patch presence check: git diff failed (rc=%d) — cannot verify patch is applied",
+                result.returncode,
+            )
+            return
+
+        modified = set(result.stdout.splitlines())
+        overlap = modified.intersection(touched)
+        if not overlap:
+            log.warning(
+                "Patch presence check FAILED for attempt #%d (mode=%s): "
+                "none of the expected touched files (%s) appear in `git diff --name-only`. "
+                "The workspace may have been reset since repair. "
+                "Validation will run on potentially unpatched code.",
+                attempt_row.attempt_number,
+                attempt_row.repair_mode,
+                ", ".join(touched[:5]),
+            )
+        else:
+            log.debug(
+                "Patch presence check OK for attempt #%d: %d/%d touched files are modified",
+                attempt_row.attempt_number, len(overlap), len(touched),
+            )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        log.warning("Patch presence check skipped — git subprocess error: %s", exc)
 
 
 def _aggregate_status(task_outcomes: list[TaskOutcome]) -> str:

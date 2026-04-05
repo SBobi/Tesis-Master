@@ -11,8 +11,14 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from ..domain.validation import ValidationStatus
 from ..storage.models import EvaluationMetric, RepairCase
-from ..storage.repositories import EvaluationMetricRepo, RepairCaseRepo
+from ..storage.repositories import (
+    EvaluationMetricRepo,
+    PatchAttemptRepo,
+    RepairCaseRepo,
+    ValidationRunRepo,
+)
 from ..utils.log import get_logger
 
 log = get_logger(__name__)
@@ -79,10 +85,26 @@ def build_report(
         if case_repo.get_by_id(cid) is not None
     }
 
+    patch_repo = PatchAttemptRepo(session)
+    val_repo = ValidationRunRepo(session)
+    attempts_index: dict[str, list] = {
+        cid: patch_repo.list_for_case(cid)
+        for cid in unique_case_ids
+    }
+
     rows: list[ReportRow] = []
     for m in metrics:
         case_row = case_index.get(m.repair_case_id)
         repo_url, pr_ref, update_class = _extract_event_info(case_row)
+
+        attempts_for_mode = [
+            _attempt_to_dict(a, val_repo)
+            for a in attempts_index.get(m.repair_case_id, [])
+            if a.repair_mode == m.repair_mode
+        ]
+        merged_extra = dict(m.extra or {})
+        if attempts_for_mode:
+            merged_extra["attempts"] = attempts_for_mode
 
         rows.append(ReportRow(
             case_id=m.repair_case_id,
@@ -99,7 +121,7 @@ def build_report(
             hit_at_3=m.hit_at_3,
             hit_at_5=m.hit_at_5,
             source_set_accuracy=m.source_set_accuracy,
-            extra=m.extra or {},
+            extra=merged_extra,
         ))
 
     log.info("Report assembled: %d row(s) across %d case(s)", len(rows), len(unique_case_ids))
@@ -123,3 +145,41 @@ def _extract_event_info(case_row: Optional[RepairCase]) -> tuple[str, str, str]:
         return repo_url, pr_ref, update_class
     except Exception:
         return "", "", ""
+
+
+def _attempt_to_dict(attempt, val_repo: ValidationRunRepo) -> dict:
+    """Convert one PatchAttempt row into a report-friendly dict."""
+    strategy = _extract_patch_strategy(attempt.retry_reason)
+    val_runs = val_repo.list_for_patch(attempt.id)
+    return {
+        "attempt_number": attempt.attempt_number,
+        "patch_strategy": strategy,
+        "patch_status": attempt.status,
+        "validation_status": _aggregate_validation_status(val_runs),
+        "created_at": str(attempt.created_at) if attempt.created_at else "",
+    }
+
+
+def _extract_patch_strategy(retry_reason: str | None) -> str:
+    """Parse `patch_strategy=<value>` from retry_reason metadata."""
+    if not retry_reason:
+        return "single_diff"
+    token = "patch_strategy="
+    idx = retry_reason.find(token)
+    if idx == -1:
+        return "single_diff"
+    value = retry_reason[idx + len(token):].split(";", 1)[0].strip()
+    return value or "single_diff"
+
+
+def _aggregate_validation_status(val_runs: list) -> str:
+    if not val_runs:
+        return "NOT_RUN"
+    statuses = [vr.status for vr in val_runs]
+    if any(s == ValidationStatus.FAILED_BUILD.value for s in statuses):
+        return ValidationStatus.FAILED_BUILD.value
+    if any(s == ValidationStatus.FAILED_TESTS.value for s in statuses):
+        return ValidationStatus.FAILED_TESTS.value
+    if all(s == ValidationStatus.SUCCESS_REPOSITORY_LEVEL.value for s in statuses):
+        return ValidationStatus.SUCCESS_REPOSITORY_LEVEL.value
+    return ValidationStatus.INCONCLUSIVE.value

@@ -35,6 +35,7 @@ def _row(
     hit_at_3: float | None = 1.0,
     hit_at_5: float | None = 1.0,
     source_set_accuracy: float | None = None,
+    extra: dict | None = None,
 ) -> ReportRow:
     return ReportRow(
         case_id=case_id,
@@ -51,6 +52,7 @@ def _row(
         hit_at_3=hit_at_3,
         hit_at_5=hit_at_5,
         source_set_accuracy=source_set_accuracy,
+        extra=extra or {},
     )
 
 
@@ -147,6 +149,29 @@ class TestToMarkdown:
         md = to_markdown([])
         assert "No evaluation results" in md
 
+    def test_includes_attempt_strategy_comparison_section(self) -> None:
+        row = _row(extra={
+            "attempts": [
+                {
+                    "attempt_number": 2,
+                    "patch_strategy": "single_diff",
+                    "patch_status": "FAILED_APPLY",
+                    "validation_status": "NOT_RUN",
+                    "created_at": "2026-04-05T01:35:33Z",
+                },
+                {
+                    "attempt_number": 3,
+                    "patch_strategy": "chain_by_file",
+                    "patch_status": "FAILED_APPLY",
+                    "validation_status": "FAILED_BUILD",
+                    "created_at": "2026-04-05T01:36:01Z",
+                },
+            ]
+        })
+        md = to_markdown([row])
+        assert "Attempt Strategy Comparison" in md
+        assert "chain_by_file" in md
+
 
 # ---------------------------------------------------------------------------
 # aggregate_by_mode
@@ -231,9 +256,13 @@ class TestBuildReport:
         with (
             patch("kmp_repair_pipeline.reporting.report_builder.EvaluationMetricRepo") as MockMetric,
             patch("kmp_repair_pipeline.reporting.report_builder.RepairCaseRepo") as MockCase,
+            patch("kmp_repair_pipeline.reporting.report_builder.PatchAttemptRepo") as MockPatch,
+            patch("kmp_repair_pipeline.reporting.report_builder.ValidationRunRepo") as MockVal,
         ):
             MockMetric.return_value.list_all.return_value = [metric]
             MockCase.return_value.get_by_id.return_value = case
+            MockPatch.return_value.list_for_case.return_value = []
+            MockVal.return_value.list_for_patch.return_value = []
 
             rows = build_report(session)
 
@@ -247,11 +276,54 @@ class TestBuildReport:
 
         session = MagicMock()
 
-        with patch("kmp_repair_pipeline.reporting.report_builder.EvaluationMetricRepo") as MockMetric:
+        with (
+            patch("kmp_repair_pipeline.reporting.report_builder.EvaluationMetricRepo") as MockMetric,
+            patch("kmp_repair_pipeline.reporting.report_builder.PatchAttemptRepo") as MockPatch,
+            patch("kmp_repair_pipeline.reporting.report_builder.ValidationRunRepo") as MockVal,
+        ):
             MockMetric.return_value.list_all.return_value = []
+            MockPatch.return_value.list_for_case.return_value = []
+            MockVal.return_value.list_for_patch.return_value = []
             rows = build_report(session)
 
         assert rows == []
+
+    def test_build_report_attaches_attempt_details(self) -> None:
+        from kmp_repair_pipeline.reporting.report_builder import build_report
+
+        session = MagicMock()
+        metric = self._make_metric_mock("case-001", "full_thesis", 1.0)
+        case = self._make_case_mock("case-001")
+
+        attempt = MagicMock()
+        attempt.id = "attempt-2"
+        attempt.attempt_number = 2
+        attempt.repair_mode = "full_thesis"
+        attempt.status = "FAILED_APPLY"
+        attempt.retry_reason = "patch_strategy=chain_by_file; hunk failed"
+        attempt.created_at = "2026-04-05T01:36:01Z"
+
+        vr = MagicMock()
+        vr.status = "FAILED_BUILD"
+
+        with (
+            patch("kmp_repair_pipeline.reporting.report_builder.EvaluationMetricRepo") as MockMetric,
+            patch("kmp_repair_pipeline.reporting.report_builder.RepairCaseRepo") as MockCase,
+            patch("kmp_repair_pipeline.reporting.report_builder.PatchAttemptRepo") as MockPatch,
+            patch("kmp_repair_pipeline.reporting.report_builder.ValidationRunRepo") as MockVal,
+        ):
+            MockMetric.return_value.list_all.return_value = [metric]
+            MockCase.return_value.get_by_id.return_value = case
+            MockPatch.return_value.list_for_case.return_value = [attempt]
+            MockVal.return_value.list_for_patch.return_value = [vr]
+
+            rows = build_report(session)
+
+        assert len(rows) == 1
+        attempts = rows[0].extra.get("attempts", [])
+        assert len(attempts) == 1
+        assert attempts[0]["patch_strategy"] == "chain_by_file"
+        assert attempts[0]["validation_status"] == "FAILED_BUILD"
 
 
 # ---------------------------------------------------------------------------

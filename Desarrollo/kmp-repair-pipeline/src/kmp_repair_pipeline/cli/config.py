@@ -59,7 +59,7 @@ class PipelineConfig:
     def from_env(cls) -> "PipelineConfig":
         """Read sensitive values from environment variables."""
         cfg = cls()
-        cfg.db_url = os.environ.get("DATABASE_URL", "")
+        cfg.db_url = os.environ.get("KMP_DATABASE_URL", os.environ.get("DATABASE_URL", ""))
         cfg.llm_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         return cfg
 

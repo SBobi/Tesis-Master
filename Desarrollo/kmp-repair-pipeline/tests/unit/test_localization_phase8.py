@@ -321,7 +321,7 @@ class TestFakeLLMProvider:
 
 
 class TestLocalize:
-    def _make_bundle(self, case_id: str = "case-001"):
+    def _make_bundle(self, case_id: str = "case-001", include_impact_graph: bool = True):
         from kmp_repair_pipeline.case_bundle.bundle import CaseBundle, CaseMeta
         from kmp_repair_pipeline.case_bundle.evidence import (
             ExecutionEvidence, RevisionExecution, UpdateEvidence,
@@ -350,8 +350,11 @@ class TestLocalize:
             ),
             direct_import_files=["src/commonMain/kotlin/App.kt"],
             total_kotlin_files=5,
-            impact_graph=_make_graph(
-                ("src/commonMain/kotlin/App.kt", ImpactRelation.DIRECT, 0),
+            impact_graph=(
+                _make_graph(
+                    ("src/commonMain/kotlin/App.kt", ImpactRelation.DIRECT, 0),
+                )
+                if include_impact_graph else None
             ),
         )
         bundle.execution = ExecutionEvidence(
@@ -426,3 +429,33 @@ class TestLocalize:
         assert result.agent_notes == "App.kt is the culprit"
         assert bundle.meta.status == "LOCALIZED"
         assert len(provider.calls) == 1
+
+    def test_localize_rebuilds_graph_when_not_serialized(self) -> None:
+        from kmp_repair_pipeline.localization.localizer import localize
+
+        bundle = self._make_bundle(include_impact_graph=False)
+        session = MagicMock()
+        rebuilt_graph = _make_graph(
+            ("src/commonMain/kotlin/App.kt", ImpactRelation.DIRECT, 0),
+        )
+
+        with (
+            patch("kmp_repair_pipeline.localization.localizer.from_db_case", return_value=bundle),
+            patch("kmp_repair_pipeline.localization.localizer.to_db"),
+            patch("kmp_repair_pipeline.localization.localizer.LocalizationCandidateRepo"),
+            patch("kmp_repair_pipeline.localization.localizer.RepairCaseRepo") as MockCaseRepo,
+            patch("kmp_repair_pipeline.localization.localizer.AgentLogRepo"),
+            patch("kmp_repair_pipeline.localization.localizer.RevisionRepo") as MockRevisionRepo,
+            patch("kmp_repair_pipeline.localization.localizer.run_static_analysis", return_value=rebuilt_graph) as mock_run_static,
+        ):
+            MockCaseRepo.return_value.get_by_id.return_value = MagicMock()
+            MockRevisionRepo.return_value.get.return_value = MagicMock(local_path="/tmp/repo")
+
+            result = localize(
+                case_id="case-001",
+                session=session,
+                use_agent=False,
+            )
+
+        assert result.total_candidates >= 1
+        assert mock_run_static.call_count == 1

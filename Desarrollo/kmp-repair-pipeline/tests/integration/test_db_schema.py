@@ -233,6 +233,17 @@ class TestArtifactStore:
             assert Path(out_path).read_text() == "BUILD FAILED"
             assert len(out_sha) == 64  # SHA-256 hex
 
+    def test_write_task_output_validation_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ArtifactStore(tmp, "case-validation")
+            out_path, out_sha, err_path, err_sha = store.write_task_output(
+                "validation_002_full_thesis", ":compileCommonMainKotlinMetadata", "BUILD FAILED", "stderr"
+            )
+            assert Path(out_path).is_file()
+            assert Path(err_path).is_file()
+            assert len(out_sha) == 64
+            assert len(err_sha) == 64
+
     def test_write_patch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ArtifactStore(tmp, "case-patch")

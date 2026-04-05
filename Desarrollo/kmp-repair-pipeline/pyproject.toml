@@ -28,6 +28,7 @@ dependencies = [
     "psycopg2-binary>=2.9",
     # LLM provider (added Phase 9)
     "anthropic>=0.25",
+    "google-genai>=0.8",
     # HTTP for GitHub API calls
     "httpx>=0.27",
 ]

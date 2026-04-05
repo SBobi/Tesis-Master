@@ -28,7 +28,11 @@ _SessionFactory = None
 
 
 def get_db_url() -> str:
-    return os.environ.get("DATABASE_URL", _DEFAULT_URL)
+    return (
+        os.environ.get("KMP_DATABASE_URL")
+        or os.environ.get("DATABASE_URL")
+        or _DEFAULT_URL
+    )
 
 
 def get_engine():

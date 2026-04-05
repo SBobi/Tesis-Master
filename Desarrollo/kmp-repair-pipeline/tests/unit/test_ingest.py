@@ -96,6 +96,18 @@ class TestDetectVersionChanges:
         result = detect_version_changes(before_toml, before_toml)
         assert not result.has_changes
 
+    def test_detects_changes_from_raw_toml_content(self, before_toml: Path, after_toml: Path) -> None:
+        result = detect_version_changes(
+            before_toml.read_text(encoding="utf-8"),
+            after_toml.read_text(encoding="utf-8"),
+        )
+        assert result.has_changes
+        assert any(c.dependency_group == "io.ktor" for c in result.changes)
+
+    def test_string_paths_still_supported(self, before_toml: Path, after_toml: Path) -> None:
+        result = detect_version_changes(str(before_toml), str(after_toml))
+        assert result.has_changes
+
 
 class TestEventClassifier:
     def test_classifies_plugin(self) -> None:

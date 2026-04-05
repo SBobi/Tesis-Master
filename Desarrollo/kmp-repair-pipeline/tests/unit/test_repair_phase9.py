@@ -40,6 +40,14 @@ SAMPLE_DIFF = textwrap.dedent("""\
     +// updated
 """)
 
+MALFORMED_DIFF = textwrap.dedent("""\
+    --- a/src/commonMain/kotlin/App.kt
+    +++ b/src/commonMain/kotlin/App.kt
+    @@ -1,3 +1,3 @@
+     package com.example
+    this line is malformed in a hunk
+""")
+
 
 class TestExtractTouchedFiles:
     def test_extracts_two_files(self) -> None:
@@ -306,9 +314,11 @@ class TestRepair:
             )
 
         assert bundle.meta.status == "PATCH_ATTEMPTED"
+        assert result.patch_strategy == "single_diff"
         assert result.patch_status == "APPLIED"
         assert result.attempt_number == 1
         assert "src/commonMain/kotlin/App.kt" in result.touched_files
+        assert attempt_row.retry_reason == "patch_strategy=single_diff"
 
     def test_impossible_patch_sets_impossible_status(self, tmp_path: Path) -> None:
         from kmp_repair_pipeline.repair.repairer import repair
@@ -342,10 +352,176 @@ class TestRepair:
                 case_id="case-001", session=session,
                 artifact_base=tmp_path, repair_mode="raw_error",
                 provider=provider,
+                force_patch_attempt=False,
             )
 
+        assert result.patch_strategy == "single_diff"
         assert result.patch_status == "IMPOSSIBLE"
         assert result.diff_path is None
+
+    def test_malformed_diff_is_rejected_before_apply(self, tmp_path: Path) -> None:
+        from kmp_repair_pipeline.repair.repairer import repair
+
+        bundle = self._make_bundle()
+        provider = FakeLLMProvider(responses=[MALFORMED_DIFF])
+        session = MagicMock()
+
+        after_rev = MagicMock()
+        after_rev.local_path = str(tmp_path)
+
+        with (
+            patch("kmp_repair_pipeline.repair.repairer.from_db_case", return_value=bundle),
+            patch("kmp_repair_pipeline.repair.repairer.to_db"),
+            patch("kmp_repair_pipeline.repair.repairer.RevisionRepo") as MockRevRepo,
+            patch("kmp_repair_pipeline.repair.repairer.PatchAttemptRepo") as MockPatchRepo,
+            patch("kmp_repair_pipeline.repair.repairer.AgentLogRepo"),
+            patch("kmp_repair_pipeline.repair.repairer.RepairCaseRepo") as MockCaseRepo,
+            patch("kmp_repair_pipeline.repair.repairer.ArtifactStore") as MockStore,
+            patch("kmp_repair_pipeline.repair.repairer.apply_patch") as mock_apply,
+        ):
+            MockRevRepo.return_value.get.return_value = after_rev
+            MockPatchRepo.return_value.list_for_case.return_value = []
+            attempt_row = MagicMock()
+            MockPatchRepo.return_value.create.return_value = attempt_row
+            MockCaseRepo.return_value.get_by_id.return_value = MagicMock()
+            store = MagicMock()
+            store.write_prompt.return_value = ("/p/prompt.txt", "sha1")
+            store.write_response.return_value = ("/p/response.txt", "sha2")
+            store.write_patch.return_value = ("/p/patch.diff", "sha3")
+            MockStore.return_value = store
+
+            result = repair(
+                case_id="case-001",
+                session=session,
+                artifact_base=tmp_path / "artifacts",
+                repair_mode="full_thesis",
+                provider=provider,
+            )
+
+        assert result.patch_status == "FAILED_APPLY"
+        assert "patch_strategy=single_diff" in attempt_row.retry_reason
+        assert "malformed diff precheck failed" in attempt_row.retry_reason
+        mock_apply.assert_not_called()
+
+    def test_force_patch_attempt_retries_after_impossible(self, tmp_path: Path) -> None:
+        from kmp_repair_pipeline.repair.repairer import repair
+
+        bundle = self._make_bundle()
+        provider = FakeLLMProvider(responses=["PATCH_IMPOSSIBLE", SAMPLE_DIFF])
+        session = MagicMock()
+
+        after_rev = MagicMock()
+        after_rev.local_path = str(tmp_path)
+
+        with (
+            patch("kmp_repair_pipeline.repair.repairer.from_db_case", return_value=bundle),
+            patch("kmp_repair_pipeline.repair.repairer.to_db"),
+            patch("kmp_repair_pipeline.repair.repairer.RevisionRepo") as MockRevRepo,
+            patch("kmp_repair_pipeline.repair.repairer.PatchAttemptRepo") as MockPatchRepo,
+            patch("kmp_repair_pipeline.repair.repairer.AgentLogRepo"),
+            patch("kmp_repair_pipeline.repair.repairer.RepairCaseRepo") as MockCaseRepo,
+            patch("kmp_repair_pipeline.repair.repairer.ArtifactStore") as MockStore,
+            patch("kmp_repair_pipeline.repair.repairer.apply_patch") as mock_apply,
+        ):
+            MockRevRepo.return_value.get.return_value = after_rev
+            MockPatchRepo.return_value.list_for_case.return_value = []
+            attempt_row = MagicMock()
+            MockPatchRepo.return_value.create.return_value = attempt_row
+            MockCaseRepo.return_value.get_by_id.return_value = MagicMock()
+            store = MagicMock()
+            store.write_prompt.return_value = ("/p/prompt.txt", "sha1")
+            store.write_response.return_value = ("/p/response.txt", "sha2")
+            store.write_patch.return_value = ("/p/patch.diff", "sha3")
+            MockStore.return_value = store
+            mock_apply.return_value = PatchApplicationResult(
+                success=True, touched_files=["src/commonMain/kotlin/App.kt"]
+            )
+
+            result = repair(
+                case_id="case-001",
+                session=session,
+                artifact_base=tmp_path / "artifacts",
+                repair_mode="full_thesis",
+                provider=provider,
+                force_patch_attempt=True,
+            )
+
+        assert result.patch_status == "APPLIED"
+        assert len(provider.calls) == 2
+        assert "forced patch retry used" in attempt_row.retry_reason
+        assert store.write_prompt.call_count == 2
+
+
+class TestPatchStrategies:
+    def test_split_diff_by_file_returns_two_blocks(self) -> None:
+        from kmp_repair_pipeline.repair.repairer import _split_diff_by_file
+
+        blocks = _split_diff_by_file(SAMPLE_DIFF)
+        assert len(blocks) == 2
+        assert "+++ b/src/commonMain/kotlin/App.kt" in blocks[0]
+        assert "+++ b/src/androidMain/kotlin/Platform.kt" in blocks[1]
+
+    def test_chain_by_file_stops_on_first_failure(self, tmp_path: Path) -> None:
+        from kmp_repair_pipeline.repair.repairer import _apply_patch_chain_by_file
+
+        calls = {"count": 0}
+
+        def fake_apply(_diff_text, _repo_path):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                return PatchApplicationResult(success=True, touched_files=["src/commonMain/kotlin/App.kt"])
+            return PatchApplicationResult(success=False, stderr="hunk failed")
+
+        with patch("kmp_repair_pipeline.repair.repairer.apply_patch", side_effect=fake_apply):
+            result = _apply_patch_chain_by_file(SAMPLE_DIFF, tmp_path)
+
+        assert calls["count"] == 2
+        assert result.success is False
+        assert "block 2/2" in result.stderr
+        assert "src/commonMain/kotlin/App.kt" in result.touched_files
+
+    def test_chain_by_file_all_success(self, tmp_path: Path) -> None:
+        from kmp_repair_pipeline.repair.repairer import _apply_patch_chain_by_file
+
+        with patch(
+            "kmp_repair_pipeline.repair.repairer.apply_patch",
+            return_value=PatchApplicationResult(success=True, touched_files=["some/file.kt"]),
+        ) as mock_apply:
+            result = _apply_patch_chain_by_file(SAMPLE_DIFF, tmp_path)
+
+        assert mock_apply.call_count == 2
+        assert result.success is True
+        assert "some/file.kt" in result.touched_files
+
+
+class TestDiffPrecheck:
+    def test_valid_diff_passes(self) -> None:
+        from kmp_repair_pipeline.repair.repairer import _precheck_unified_diff
+
+        ok, detail = _precheck_unified_diff(SAMPLE_DIFF)
+        assert ok is True
+        assert detail == ""
+
+    def test_malformed_diff_fails(self) -> None:
+        from kmp_repair_pipeline.repair.repairer import _precheck_unified_diff
+
+        ok, detail = _precheck_unified_diff(MALFORMED_DIFF)
+        assert ok is False
+        assert "invalid hunk line" in detail
+
+    def test_markdown_fenced_diff_is_normalized(self) -> None:
+        from kmp_repair_pipeline.repair.repairer import (
+            _normalize_model_diff_output,
+            _precheck_unified_diff,
+        )
+
+        fenced = f"```diff\n{SAMPLE_DIFF}```"
+        normalized = _normalize_model_diff_output(fenced)
+        assert normalized.startswith("--- a/")
+        assert "```" not in normalized
+        ok, detail = _precheck_unified_diff(normalized)
+        assert ok is True
+        assert detail == ""
 
 
 # ---------------------------------------------------------------------------

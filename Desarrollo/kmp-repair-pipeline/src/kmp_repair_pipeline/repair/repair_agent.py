@@ -46,6 +46,14 @@ Rules:
 6. If you need to change multiple files, include all of them in one diff.
 """
 
+_FORCE_PATCH_APPENDIX = """\
+
+## Strict Output Requirement
+Return a best-effort unified diff and do NOT output PATCH_IMPOSSIBLE.
+Modify at least one file from the localized file list.
+If unsure, make the smallest safe compatibility patch possible.
+"""
+
 
 @dataclass
 class AgentRepairOutput:
@@ -61,6 +69,7 @@ def run_repair_agent(
     provider: LLMProvider,
     attempt_number: int = 1,
     repair_mode: str = "full_thesis",
+    force_patch_attempt: bool = False,
 ) -> AgentRepairOutput:
     """Call the LLM to synthesize a repair patch.
 
@@ -75,7 +84,15 @@ def run_repair_agent(
     repair_mode:
         One of: full_thesis, raw_error, context_rich, iterative_agentic.
     """
-    prompt = _build_prompt(repair_context, attempt_number, repair_mode)
+    prompt = _build_prompt(
+        repair_context,
+        attempt_number,
+        repair_mode,
+        force_patch_attempt=force_patch_attempt,
+    )
+    system_prompt = _SYSTEM_PROMPT
+    if force_patch_attempt:
+        system_prompt += "\n7. For this call, you MUST return a unified diff and MUST NOT return PATCH_IMPOSSIBLE."
 
     log.info(
         "Calling %s (model=%s mode=%s attempt=%d)",
@@ -83,7 +100,7 @@ def run_repair_agent(
     )
     response = provider.complete(
         prompt=prompt,
-        system=_SYSTEM_PROMPT,
+        system=system_prompt,
         max_tokens=8192,
         temperature=0.0,
     )
@@ -110,13 +127,23 @@ def run_repair_agent(
 # ---------------------------------------------------------------------------
 
 
-def _build_prompt(context: dict, attempt_number: int, mode: str) -> str:
+def _build_prompt(
+    context: dict,
+    attempt_number: int,
+    mode: str,
+    force_patch_attempt: bool = False,
+) -> str:
     if mode == "raw_error":
-        return _prompt_raw_error(context, attempt_number)
-    if mode == "context_rich":
-        return _prompt_context_rich(context, attempt_number)
-    # full_thesis and iterative_agentic use the same rich prompt
-    return _prompt_full_thesis(context, attempt_number)
+        base = _prompt_raw_error(context, attempt_number)
+    elif mode == "context_rich":
+        base = _prompt_context_rich(context, attempt_number)
+    else:
+        # full_thesis and iterative_agentic use the same rich prompt
+        base = _prompt_full_thesis(context, attempt_number)
+
+    if force_patch_attempt:
+        return f"{base}\n{_FORCE_PATCH_APPENDIX}"
+    return base
 
 
 def _prompt_raw_error(context: dict, attempt: int) -> str:

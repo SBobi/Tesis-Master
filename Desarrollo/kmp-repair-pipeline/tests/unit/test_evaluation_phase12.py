@@ -331,6 +331,7 @@ class TestEvaluate:
 
         attempt_row = MagicMock()
         attempt_row.id = "attempt-001"
+        attempt_row.attempt_number = 1
         attempt_row.repair_mode = "full_thesis"
 
         with (
@@ -343,7 +344,13 @@ class TestEvaluate:
             patch("kmp_repair_pipeline.evaluation.evaluator.RepairCaseRepo") as MockCase,
         ):
             MockPatch.return_value.list_for_case.return_value = [attempt_row]
-            MockValRun.return_value.list_for_patch.return_value = []
+            vr = MagicMock()
+            vr.target = "shared"
+            vr.status = ValidationStatus.SUCCESS_REPOSITORY_LEVEL.value
+            vr.unavailable_reason = None
+            vr.duration_s = 1.0
+            vr.execution_run_id = None
+            MockValRun.return_value.list_for_patch.return_value = [vr]
             MockMetric.return_value.upsert.return_value = MagicMock()
             MockCase.return_value.get_by_id.return_value = MagicMock()
 
@@ -385,6 +392,7 @@ class TestEvaluate:
 
         attempt_row = MagicMock()
         attempt_row.id = "attempt-001"
+        attempt_row.attempt_number = 1
         attempt_row.repair_mode = "raw_error"
 
         with (
@@ -397,7 +405,13 @@ class TestEvaluate:
             patch("kmp_repair_pipeline.evaluation.evaluator.RepairCaseRepo") as MockCase,
         ):
             MockPatch.return_value.list_for_case.return_value = [attempt_row]
-            MockValRun.return_value.list_for_patch.return_value = []
+            vr = MagicMock()
+            vr.target = "shared"
+            vr.status = ValidationStatus.SUCCESS_REPOSITORY_LEVEL.value
+            vr.unavailable_reason = None
+            vr.duration_s = 1.0
+            vr.execution_run_id = None
+            MockValRun.return_value.list_for_patch.return_value = [vr]
             MockMetric.return_value.upsert.return_value = MagicMock()
             MockCase.return_value.get_by_id.return_value = MagicMock()
 
@@ -407,3 +421,57 @@ class TestEvaluate:
         m = result.metrics[0]
         assert m.hit_at_1 == 1.0   # App.kt is rank-1 candidate
         assert m.source_set_accuracy == 1.0
+
+    def test_validation_is_scoped_per_baseline_attempt(self) -> None:
+        from kmp_repair_pipeline.evaluation.evaluator import evaluate
+
+        bundle = _make_bundle()
+        session = MagicMock()
+
+        raw_attempt = MagicMock()
+        raw_attempt.id = "attempt-raw"
+        raw_attempt.attempt_number = 1
+        raw_attempt.repair_mode = "raw_error"
+
+        thesis_attempt = MagicMock()
+        thesis_attempt.id = "attempt-thesis"
+        thesis_attempt.attempt_number = 1
+        thesis_attempt.repair_mode = "full_thesis"
+
+        failed_vr = MagicMock()
+        failed_vr.target = "shared"
+        failed_vr.status = ValidationStatus.FAILED_BUILD.value
+        failed_vr.unavailable_reason = None
+        failed_vr.duration_s = 1.0
+        failed_vr.execution_run_id = None
+
+        success_vr = MagicMock()
+        success_vr.target = "shared"
+        success_vr.status = ValidationStatus.SUCCESS_REPOSITORY_LEVEL.value
+        success_vr.unavailable_reason = None
+        success_vr.duration_s = 1.0
+        success_vr.execution_run_id = None
+
+        with (
+            patch("kmp_repair_pipeline.evaluation.evaluator.from_db_case", return_value=bundle),
+            patch("kmp_repair_pipeline.evaluation.evaluator.PatchAttemptRepo") as MockPatch,
+            patch("kmp_repair_pipeline.evaluation.evaluator.EvaluationMetricRepo") as MockMetric,
+            patch("kmp_repair_pipeline.evaluation.evaluator.ValidationRunRepo") as MockValRun,
+            patch("kmp_repair_pipeline.evaluation.evaluator.TaskResultRepo"),
+            patch("kmp_repair_pipeline.evaluation.evaluator.ErrorObservationRepo"),
+            patch("kmp_repair_pipeline.evaluation.evaluator.RepairCaseRepo") as MockCase,
+        ):
+            MockPatch.return_value.list_for_case.return_value = [raw_attempt, thesis_attempt]
+            # Two calls per mode: remaining errors loader + validation loader
+            MockValRun.return_value.list_for_patch.side_effect = [
+                [], [failed_vr],
+                [], [success_vr],
+            ]
+            MockMetric.return_value.upsert.return_value = MagicMock()
+            MockCase.return_value.get_by_id.return_value = MagicMock()
+
+            result = evaluate(case_id="case-012", session=session)
+
+        by_mode = {m.repair_mode: m for m in result.metrics}
+        assert by_mode["raw_error"].bsr == 0.0
+        assert by_mode["full_thesis"].bsr == 1.0

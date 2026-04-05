@@ -12,6 +12,7 @@ Returns `DiscoveredRepo` instances; callers feed these into `event_builder`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from . import github_client as gh
@@ -54,6 +55,10 @@ class DiscoveredRepo:
     open_dependabot_prs: list[int] = field(default_factory=list)  # PR numbers
     kmp_confirmed: bool = False
     has_version_catalog: bool = False
+    commit_count: int = 0
+    non_bot_contributors: int = 0
+    last_non_bot_commit_at: str = ""
+    excluded_reason: str = ""
 
     @property
     def pr_urls(self) -> list[str]:
@@ -64,7 +69,11 @@ class DiscoveredRepo:
 
 
 def discover(
-    min_stars: int = 5,
+    min_stars: int = 100,
+    min_commits: int = 250,
+    min_non_bot_contributors: int = 3,
+    active_months: int = 18,
+    require_kmp_targets: bool = True,
     max_repos: int = 50,
     max_prs_per_repo: int = 10,
 ) -> list[DiscoveredRepo]:
@@ -74,6 +83,14 @@ def discover(
     ----------
     min_stars:
         Minimum star count to consider a repository.
+    min_commits:
+        Minimum commit count threshold (estimated from contributor totals).
+    min_non_bot_contributors:
+        Minimum number of non-bot contributors.
+    active_months:
+        Require at least one non-bot commit within this window.
+    require_kmp_targets:
+        Require source trees containing commonMain, androidMain, and iosMain.
     max_repos:
         Upper bound on how many repositories to return.
     max_prs_per_repo:
@@ -91,6 +108,19 @@ def discover(
         # Verify version catalog presence and fetch open Dependabot PRs
         candidate.has_version_catalog = _has_version_catalog(candidate)
         if not candidate.has_version_catalog:
+            continue
+
+        eligible, reason = _meets_selection_criteria(
+            candidate,
+            min_stars=min_stars,
+            min_commits=min_commits,
+            min_non_bot_contributors=min_non_bot_contributors,
+            active_months=active_months,
+            require_kmp_targets=require_kmp_targets,
+        )
+        if not eligible:
+            candidate.excluded_reason = reason
+            log.debug("Excluded %s: %s", candidate.full_name, reason)
             continue
 
         prs = _open_dependabot_prs(candidate, max_prs_per_repo)
@@ -228,3 +258,124 @@ def _is_dependabot_pr(pr: dict, labels: list[str]) -> bool:
         if any(lb in labels for lb in ("dependencies", "dependabot")):
             return True
     return False
+
+
+def _meets_selection_criteria(
+    repo: DiscoveredRepo,
+    min_stars: int,
+    min_commits: int,
+    min_non_bot_contributors: int,
+    active_months: int,
+    require_kmp_targets: bool,
+) -> tuple[bool, str]:
+    """Check thesis repository selection criteria for one discovered repo."""
+    try:
+        metadata = gh.get(f"/repos/{repo.owner}/{repo.repo}")
+    except gh.GitHubAPIError as exc:
+        return False, f"metadata lookup failed ({exc.status})"
+
+    stars = int(metadata.get("stargazers_count") or repo.stars or 0)
+    repo.stars = stars
+    if stars < min_stars:
+        return False, f"stars={stars} < {min_stars}"
+
+    if bool(metadata.get("archived", False)):
+        return False, "repository archived"
+
+    contributors = _list_contributors(repo.owner, repo.repo)
+    non_bot_contributors = [c for c in contributors if not _is_bot_account(c)]
+    repo.non_bot_contributors = len(non_bot_contributors)
+    if repo.non_bot_contributors < min_non_bot_contributors:
+        return False, f"non-bot contributors={repo.non_bot_contributors} < {min_non_bot_contributors}"
+
+    commit_count = sum(int(c.get("contributions") or 0) for c in non_bot_contributors)
+    repo.commit_count = commit_count
+    if commit_count < min_commits:
+        return False, f"estimated commits={commit_count} < {min_commits}"
+
+    latest_non_bot = _latest_non_bot_commit_at(repo.owner, repo.repo)
+    if latest_non_bot is None:
+        return False, "no non-bot commit found"
+
+    repo.last_non_bot_commit_at = latest_non_bot.isoformat()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30 * active_months)
+    if latest_non_bot < cutoff:
+        return False, "no recent non-bot commit in activity window"
+
+    if require_kmp_targets and not _has_required_kmp_targets(repo):
+        return False, "missing one or more required KMP targets (commonMain/androidMain/iosMain)"
+
+    return True, ""
+
+
+def _list_contributors(owner: str, repo: str, max_pages: int = 5) -> list[dict]:
+    contributors: list[dict] = []
+    for page in range(1, max_pages + 1):
+        try:
+            data = gh.get(
+                f"/repos/{owner}/{repo}/contributors",
+                params={"per_page": 100, "page": page, "anon": "true"},
+            )
+        except gh.GitHubAPIError:
+            break
+        if not data:
+            break
+        contributors.extend(data)
+        if len(data) < 100:
+            break
+    return contributors
+
+
+def _is_bot_account(contributor: dict) -> bool:
+    login = str(contributor.get("login") or "").lower()
+    account_type = str(contributor.get("type") or "").lower()
+    return account_type == "bot" or login.endswith("[bot]") or login == "dependabot"
+
+
+def _latest_non_bot_commit_at(owner: str, repo: str) -> datetime | None:
+    """Return latest non-bot commit datetime, or None if none found."""
+    try:
+        commits = gh.get(
+            f"/repos/{owner}/{repo}/commits",
+            params={"per_page": 50, "page": 1},
+        )
+    except gh.GitHubAPIError:
+        return None
+
+    for commit in commits:
+        author = commit.get("author")
+        if author is not None and _is_bot_account(author):
+            continue
+        date_raw = (commit.get("commit") or {}).get("author", {}).get("date")
+        parsed = _parse_github_datetime(date_raw)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _parse_github_datetime(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _has_required_kmp_targets(repo: DiscoveredRepo) -> bool:
+    """Check that repository tree includes commonMain + androidMain + iosMain."""
+    try:
+        tree_data = gh.get(
+            f"/repos/{repo.owner}/{repo.repo}/git/trees/{repo.default_branch}",
+            params={"recursive": "1"},
+        )
+    except gh.GitHubAPIError:
+        return False
+
+    tree = tree_data.get("tree", [])
+    paths = [node.get("path", "") for node in tree if node.get("type") == "blob"]
+
+    has_common = any("/commonMain/" in p or p.startswith("src/commonMain/") for p in paths)
+    has_android = any("/androidMain/" in p or p.startswith("src/androidMain/") for p in paths)
+    has_ios = any("/iosMain/" in p or p.startswith("src/iosMain/") for p in paths)
+    return has_common and has_android and has_ios

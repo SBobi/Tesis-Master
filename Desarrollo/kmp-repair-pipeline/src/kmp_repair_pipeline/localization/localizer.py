@@ -24,16 +24,19 @@ from sqlalchemy.orm import Session
 from ..case_bundle.bundle import CaseBundle
 from ..case_bundle.evidence import LocalizationResult
 from ..case_bundle.serialization import from_db_case, to_db
+from ..domain.analysis import ImpactGraph
 from ..localization.localization_agent import (
     AGENT_TYPE,
     _deterministic_to_result_candidates,
     run_localization_agent,
 )
 from ..localization.scoring import ScoredCandidate, score_candidates
+from ..static_analysis.analyzer import run_static_analysis
 from ..storage.artifact_store import ArtifactStore
 from ..storage.repositories import (
     AgentLogRepo,
     LocalizationCandidateRepo,
+    RevisionRepo,
     RepairCaseRepo,
 )
 from ..utils.llm_provider import LLMProvider, get_default_provider
@@ -81,9 +84,12 @@ def localize(
         raise ValueError(f"Case {case_id} not found in DB")
 
     # Gather evidence
-    impact_graph = bundle.structural.impact_graph if bundle.structural else None
+    impact_graph, direct_imports = _resolve_static_signals(
+        bundle=bundle,
+        case_id=case_id,
+        session=session,
+    )
     error_obs = bundle.execution.all_errors("after") if bundle.execution else []
-    direct_imports = bundle.structural.direct_import_files if bundle.structural else []
 
     # --- Step 1: Deterministic scoring ------------------------------------
     scored = score_candidates(
@@ -206,3 +212,95 @@ def _next_agent_call_index(case_id: str, session: Session) -> int:
     )
     count = session.scalar(stmt) or 0
     return count
+
+
+def _resolve_static_signals(
+    bundle: CaseBundle,
+    case_id: str,
+    session: Session,
+) -> tuple[ImpactGraph | None, list[str]]:
+    """Return (impact_graph, direct_import_files) for deterministic localization.
+
+    Rehydrated bundles may not carry an ImpactGraph because that object is not
+    normalized in DB tables. In that case, rebuild it from the after-clone and
+    update evidence to preserve the thesis static-signal pipeline.
+    """
+    if bundle.structural and bundle.structural.impact_graph is not None:
+        return bundle.structural.impact_graph, bundle.structural.direct_import_files
+
+    if not bundle.update_evidence or not bundle.update_evidence.version_changes:
+        return None, bundle.structural.direct_import_files if bundle.structural else []
+
+    after_rev = RevisionRepo(session).get(case_id, "after")
+    if after_rev is None or not after_rev.local_path:
+        return None, bundle.structural.direct_import_files if bundle.structural else []
+
+    graphs: list[ImpactGraph] = []
+    for vc in bundle.update_evidence.version_changes:
+        try:
+            graphs.append(
+                run_static_analysis(
+                    project_dir=after_rev.local_path,
+                    dependency_group=vc.dependency_group,
+                    version_before=vc.before,
+                    version_after=vc.after,
+                )
+            )
+        except Exception as exc:
+            log.warning(
+                "Case %s: static re-analysis failed for %s: %s",
+                case_id[:8], vc.dependency_group, exc,
+            )
+
+    merged = _merge_graphs(graphs)
+    direct_imports: list[str] = []
+    for g in graphs:
+        for sf in g.seed_files:
+            if sf not in direct_imports:
+                direct_imports.append(sf)
+
+    if bundle.structural:
+        bundle.structural.impact_graph = merged
+        if direct_imports:
+            bundle.structural.direct_import_files = direct_imports
+
+    return merged, direct_imports
+
+
+def _merge_graphs(graphs: list[ImpactGraph]) -> ImpactGraph | None:
+    """Merge multiple dependency impact graphs into one union graph."""
+    if not graphs:
+        return None
+    if len(graphs) == 1:
+        return graphs[0]
+
+    base = graphs[0]
+    seen_paths = {fi.file_path for fi in base.impacted_files}
+    merged_impacted = list(base.impacted_files)
+    merged_seeds = list(base.seed_files)
+    merged_pairs = list(base.expect_actual_pairs)
+    seen_fqcns = {p.expect_fqcn for p in merged_pairs}
+
+    for g in graphs[1:]:
+        for fi in g.impacted_files:
+            if fi.file_path not in seen_paths:
+                seen_paths.add(fi.file_path)
+                merged_impacted.append(fi)
+        for sf in g.seed_files:
+            if sf not in merged_seeds:
+                merged_seeds.append(sf)
+        for pair in g.expect_actual_pairs:
+            if pair.expect_fqcn not in seen_fqcns:
+                seen_fqcns.add(pair.expect_fqcn)
+                merged_pairs.append(pair)
+
+    return ImpactGraph(
+        dependency_group=", ".join(g.dependency_group for g in graphs),
+        version_before=graphs[0].version_before,
+        version_after=graphs[0].version_after,
+        seed_files=merged_seeds,
+        impacted_files=merged_impacted,
+        expect_actual_pairs=merged_pairs,
+        total_project_files=base.total_project_files,
+        total_impacted=len(merged_impacted),
+    )

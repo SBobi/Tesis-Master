@@ -21,8 +21,10 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from ..case_bundle.evidence import TargetValidation, ValidationEvidence
 from ..case_bundle.evidence import ErrorObservation
 from ..case_bundle.serialization import from_db_case
+from ..domain.validation import ValidationStatus
 from ..storage.repositories import (
     ErrorObservationRepo,
     EvaluationMetricRepo,
@@ -101,7 +103,11 @@ def evaluate(
         )
 
         # Validation evidence scoped to this attempt's ValidationRun rows
-        validation = bundle.validation  # already scoped to last attempt in bundle
+        validation = _load_validation_for_patch(
+            patch_attempt_id=attempt_row.id,
+            patch_attempt_number=attempt_row.attempt_number,
+            session=session,
+        )
 
         m = compute_metrics(
             case_id=case_id,
@@ -179,3 +185,47 @@ def _load_remaining_errors(
                 ))
 
     return errors
+
+
+def _load_validation_for_patch(
+    patch_attempt_id: str,
+    patch_attempt_number: int,
+    session: Session,
+) -> Optional[ValidationEvidence]:
+    """Build ValidationEvidence from ValidationRun rows for one patch attempt."""
+    val_runs = ValidationRunRepo(session).list_for_patch(patch_attempt_id)
+    if not val_runs:
+        return None
+
+    target_results: list[TargetValidation] = []
+    for vr in val_runs:
+        target_results.append(
+            TargetValidation(
+                target=vr.target,
+                status=ValidationStatus(vr.status),
+                unavailable_reason=vr.unavailable_reason,
+                patch_attempt_number=patch_attempt_number,
+                duration_s=vr.duration_s,
+            )
+        )
+
+    runnable_statuses = [
+        r.status
+        for r in target_results
+        if r.status != ValidationStatus.NOT_RUN_ENVIRONMENT_UNAVAILABLE
+    ]
+    if not runnable_statuses:
+        repo_status = ValidationStatus.NOT_RUN_YET
+    elif all(s == ValidationStatus.SUCCESS_REPOSITORY_LEVEL for s in runnable_statuses):
+        repo_status = ValidationStatus.SUCCESS_REPOSITORY_LEVEL
+    elif any(s == ValidationStatus.FAILED_BUILD for s in runnable_statuses):
+        repo_status = ValidationStatus.FAILED_BUILD
+    elif any(s == ValidationStatus.FAILED_TESTS for s in runnable_statuses):
+        repo_status = ValidationStatus.FAILED_TESTS
+    else:
+        repo_status = ValidationStatus.INCONCLUSIVE
+
+    return ValidationEvidence(
+        target_results=target_results,
+        repository_level_status=repo_status,
+    )

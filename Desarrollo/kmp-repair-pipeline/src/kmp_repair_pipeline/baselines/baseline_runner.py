@@ -48,6 +48,8 @@ def run_baseline(
     artifact_base: Path | str = Path("data/artifacts"),
     provider: Optional[LLMProvider] = None,
     top_k: int = 5,
+    patch_strategy: str = "single_diff",
+    force_patch_attempt: bool = True,
 ) -> BaselineRunResult:
     """Run a single baseline mode for `case_id`.
 
@@ -69,6 +71,8 @@ def run_baseline(
                 provider=provider,
                 top_k=top_k,
                 max_attempts=_ITERATIVE_MAX_ATTEMPTS,
+                patch_strategy=patch_strategy,
+                force_patch_attempt=force_patch_attempt,
             )
             result.results.append(run)
             if run.patch_status == "APPLIED":
@@ -88,6 +92,8 @@ def run_baseline(
             repair_mode=mode,
             provider=provider,
             top_k=top_k,
+            patch_strategy=patch_strategy,
+            force_patch_attempt=force_patch_attempt,
         )
         result.results.append(run)
 
@@ -104,6 +110,8 @@ def run_all_baselines(
     artifact_base: Path | str = Path("data/artifacts"),
     provider: Optional[LLMProvider] = None,
     top_k: int = 5,
+    patch_strategy: str = "single_diff",
+    force_patch_attempt: bool = True,
     modes: Optional[list[str]] = None,
 ) -> dict[str, BaselineRunResult]:
     """Run multiple baseline modes and return a mapping of mode → result."""
@@ -117,5 +125,7 @@ def run_all_baselines(
             artifact_base=artifact_base,
             provider=provider,
             top_k=top_k,
+            patch_strategy=patch_strategy,
+            force_patch_attempt=force_patch_attempt,
         )
     return results

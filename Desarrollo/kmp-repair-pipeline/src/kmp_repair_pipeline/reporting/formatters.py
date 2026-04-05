@@ -73,6 +73,7 @@ def to_markdown(rows: list[ReportRow]) -> str:
 
     # Append aggregate summary
     lines += _summary_section(rows)
+    lines += _attempt_strategy_section(rows)
     return "\n".join(lines)
 
 
@@ -160,4 +161,53 @@ def _summary_section(rows: list[ReportRow]) -> list[str]:
     for mode, vals in agg.items():
         cells = [_fmt_cell(vals.get(m)) for m in metric_cols]
         lines.append(f"| {mode} | {vals['n']} | " + " | ".join(cells) + " |")
+    return lines
+
+
+def _attempt_strategy_section(rows: list[ReportRow]) -> list[str]:
+    """Render per-attempt strategy comparison extracted from row.extra."""
+    attempt_rows: list[dict] = []
+    for r in rows:
+        for a in (r.extra or {}).get("attempts", []):
+            attempt_rows.append(
+                {
+                    "case_id": r.case_id,
+                    "repair_mode": r.repair_mode,
+                    "attempt_number": a.get("attempt_number", ""),
+                    "patch_strategy": a.get("patch_strategy", "single_diff"),
+                    "patch_status": a.get("patch_status", ""),
+                    "validation_status": a.get("validation_status", "NOT_RUN"),
+                    "created_at": a.get("created_at", ""),
+                }
+            )
+
+    if not attempt_rows:
+        return []
+
+    # Deduplicate by case/mode/attempt in case sources overlap.
+    unique = {}
+    for row in attempt_rows:
+        key = (row["case_id"], row["repair_mode"], row["attempt_number"])
+        unique[key] = row
+    flattened = list(unique.values())
+    flattened.sort(key=lambda r: (r["case_id"], r["repair_mode"], r["attempt_number"]))
+
+    lines = [
+        "",
+        "## Attempt Strategy Comparison",
+        "",
+        "| case_id | repair_mode | attempt_number | patch_strategy | patch_status | validation_status | created_at |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for row in flattened:
+        lines.append(
+            "| "
+            f"{_fmt_cell(row['case_id'])} | "
+            f"{_fmt_cell(row['repair_mode'])} | "
+            f"{_fmt_cell(row['attempt_number'])} | "
+            f"{_fmt_cell(row['patch_strategy'])} | "
+            f"{_fmt_cell(row['patch_status'])} | "
+            f"{_fmt_cell(row['validation_status'])} | "
+            f"{_fmt_cell(row['created_at'])} |"
+        )
     return lines

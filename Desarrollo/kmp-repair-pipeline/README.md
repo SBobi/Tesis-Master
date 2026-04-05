@@ -118,7 +118,7 @@ LocalizationAgent ──── Reads: execution errors + structural evidence
 RepairAgent ────────── Reads: repair context (errors, localized files, prev attempts)
                         Writes: unified diff or PATCH_IMPOSSIBLE
                         Output: plain text unified diff
-                        Fallback: PATCH_IMPOSSIBLE flag
+                        Fallback: forced best-effort retry, then PATCH_IMPOSSIBLE flag
 
 ExplanationAgent ────── Reads: full explanation_context() from bundle
                         Writes: structured JSON + rendered Markdown
@@ -254,9 +254,21 @@ alembic upgrade head
 ### Environment Variables
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...          # Required for LLM agents
-KMP_DATABASE_URL=postgresql+psycopg2://kmp:kmp@localhost:5432/kmp_repair
-KMP_LLM_MODEL=claude-sonnet-4-6       # Optional — override model
+# LLM provider selector: anthropic | vertex
+KMP_LLM_PROVIDER=vertex
+KMP_LLM_MODEL=gemini-fast             # alias -> gemini-2.5-flash
+
+# Vertex (recommended)
+KMP_VERTEX_PROJECT=your-gcp-project-id
+KMP_VERTEX_LOCATION=us-central1
+GOOGLE_APPLICATION_CREDENTIALS=/abs/path/to/service-account.json
+
+# Anthropic (only if KMP_LLM_PROVIDER=anthropic)
+ANTHROPIC_API_KEY=sk-ant-...
+
+KMP_DATABASE_URL=postgresql+psycopg2://kmp_repair:kmp_repair_dev@localhost:5432/kmp_repair
+# Backward-compatible fallback:
+# DATABASE_URL=postgresql+psycopg2://kmp_repair:kmp_repair_dev@localhost:5432/kmp_repair
 KMP_LLM_FAKE=1                        # Use FakeLLMProvider (testing only)
 ```
 
@@ -268,20 +280,23 @@ KMP_LLM_FAKE=1                        # Use FakeLLMProvider (testing only)
 
 ```bash
 # Discover Dependabot PRs in a KMP repository
-kmp-repair discover --repo owner/repo [--min-stars 100] [--limit 20]
+kmp-repair discover --repo owner/repo [--min-stars 100] [--max-prs 20]
+# Full discovery with thesis filters
+kmp-repair discover [--min-stars 100] [--min-commits 250] [--min-contributors 3]
+                    [--active-months 18] [--strict-targets]
 
 # Ingest a specific PR as a dependency-update event
-kmp-repair ingest --repo owner/repo --pr-number 42
+kmp-repair ingest https://github.com/owner/repo/pull/42
 
 # Build a reproducible before/after repair case
-kmp-repair build-case <event_id>
+kmp-repair build-case <case_id>
 ```
 
 ### Stage 2 — Execution
 
 ```bash
 # Run Gradle before and after the update, capture errors
-kmp-repair run-before-after <case_id> [--targets shared,android,ios] [--timeout 600]
+kmp-repair run-before-after <case_id> [--target shared --target android --target ios] [--timeout 600]
 ```
 
 ### Stage 3 — Structural Analysis + Localization
@@ -291,19 +306,26 @@ kmp-repair run-before-after <case_id> [--targets shared,android,ios] [--timeout 
 kmp-repair analyze-case <case_id>
 
 # Hybrid localization: deterministic scoring + optional LocalizationAgent
-kmp-repair localize <case_id> [--no-agent] [--top-k 10] [--model claude-sonnet-4-6]
+kmp-repair localize <case_id> [--no-agent] [--top-k 10] [--provider vertex] [--model gemini-fast]
 ```
 
 ### Stage 4 — Patch Synthesis
 
 ```bash
 # Single repair mode
-kmp-repair repair <case_id> --mode full_thesis [--top-k 5] [--model claude-sonnet-4-6]
+kmp-repair repair <case_id> --mode full_thesis [--top-k 5] [--provider vertex] [--model gemini-fast]
+                  [--patch-strategy single_diff|chain_by_file] [--no-force-patch-attempt]
 
 # Run all 4 baseline modes
 kmp-repair repair <case_id> --all-baselines
 
 # Available modes: raw_error | context_rich | iterative_agentic | full_thesis
+# Available patch strategies:
+#   single_diff   -> apply the full unified diff in one shot
+#   chain_by_file -> split by file and apply sequentially (stops on first failure)
+# Stage 9 now rejects malformed unified diffs before apply_patch/apply_chain.
+# Default: retries once with forced best-effort diff when the model returns PATCH_IMPOSSIBLE.
+# Use --no-force-patch-attempt to disable that retry.
 ```
 
 ### Stage 5 — Validation & Explanation
@@ -313,7 +335,7 @@ kmp-repair repair <case_id> --all-baselines
 kmp-repair validate <case_id> [--attempt-id UUID] [--targets shared,android]
 
 # Generate structured explanation (JSON + Markdown)
-kmp-repair explain <case_id> [--model claude-sonnet-4-6]
+kmp-repair explain <case_id> [--provider vertex] [--model gemini-fast]
 ```
 
 ### Evaluation & Reporting
@@ -325,6 +347,7 @@ kmp-repair metrics <case_id> [--ground-truth ground_truth.json]
 # Export evaluation report
 kmp-repair report [--output-dir data/reports] [--format all|csv|json|markdown]
               [--modes full_thesis,raw_error] [--cases case-id-1,case-id-2]
+# Markdown report includes an "Attempt Strategy Comparison" table by attempt.
 
 # Legacy: score against ground-truth YAML (prototype)
 kmp-repair evaluate --results results.json --ground-truth gt.yml --output-dir output/
@@ -417,7 +440,7 @@ src/kmp_repair_pipeline/
     formatters.py       to_csv / to_json / to_markdown / aggregate_by_mode
     reporter.py         generate_report() orchestrator
   utils/
-    llm_provider.py     ClaudeProvider / FakeLLMProvider / NoOpProvider
+    llm_provider.py     ClaudeProvider / VertexProvider / FakeLLMProvider / NoOpProvider
     log.py              Structured logger
     json_io.py          load_json / save_json / sha256_of_file
 
@@ -438,14 +461,15 @@ alembic.ini
 
 ```python
 from kmp_repair_pipeline.utils.llm_provider import (
-    ClaudeProvider,      # Anthropic SDK, reads ANTHROPIC_API_KEY
+  ClaudeProvider,      # Anthropic SDK
+  VertexProvider,      # Vertex Gemini via google-genai
     FakeLLMProvider,     # Pre-programmed responses, records calls (tests)
     NoOpProvider,        # Raises AssertionError if called (test guard)
-    get_default_provider # Returns Fake when KMP_LLM_FAKE=1, else Claude
+  get_default_provider # Returns Fake when KMP_LLM_FAKE=1, else selected provider
 )
 
-# Override model at runtime
-provider = ClaudeProvider(model_id="claude-opus-4-6")
+# Override provider/model at runtime
+provider = get_default_provider(provider_name="vertex", model_id="gemini-fast")
 ```
 
 All providers implement `complete(prompt, system, max_tokens, temperature) → LLMResponse`.

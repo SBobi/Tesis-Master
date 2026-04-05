@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..utils.json_io import load_json, save_json
@@ -33,6 +34,7 @@ from .evidence import (
     ValidationEvidence,
 )
 from ..domain.events import DependencyUpdateEvent, UpdateClass, VersionChange
+from ..domain.analysis import ExpectActualPair
 from ..domain.validation import ValidationStatus
 
 log = get_logger(__name__)
@@ -189,8 +191,45 @@ def from_db_case(case_id: str, session: Session) -> Optional[CaseBundle]:
             other={k: v for k, v in source_set_map_data.items()
                    if k not in ("common", "android", "ios", "jvm")},
         )
+
+        # Rebuild expect/actual pairs from normalized link rows.
+        from ..storage.models import ExpectActualLink
+
+        entities_by_id = {e.id: e for e in source_entities}
+        links = list(
+            session.scalars(
+                select(ExpectActualLink).where(ExpectActualLink.repair_case_id == case.id)
+            ).all()
+        )
+        pair_map: dict[str, dict] = {}
+        for link in links:
+            expect_entity = entities_by_id.get(link.expect_entity_id)
+            actual_entity = entities_by_id.get(link.actual_entity_id)
+            if expect_entity is None or actual_entity is None:
+                continue
+            fqcn = link.fqcn or expect_entity.fqcn or expect_entity.file_path
+            entry = pair_map.setdefault(
+                fqcn,
+                {
+                    "expect_fqcn": fqcn,
+                    "expect_file": expect_entity.file_path,
+                    "actual_files": set(),
+                },
+            )
+            entry["actual_files"].add(actual_entity.file_path)
+
+        expect_actual_pairs = [
+            ExpectActualPair(
+                expect_fqcn=v["expect_fqcn"],
+                expect_file=v["expect_file"],
+                actual_files=sorted(v["actual_files"]),
+            )
+            for v in pair_map.values()
+        ]
+
         structural_ev = StructuralEvidence(
             source_set_map=ssm,
+            expect_actual_pairs=expect_actual_pairs,
             total_kotlin_files=len(set(e.file_path for e in source_entities)),
         )
 

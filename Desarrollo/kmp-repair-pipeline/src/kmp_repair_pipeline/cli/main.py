@@ -11,6 +11,13 @@ from ..utils.log import get_logger
 log = get_logger(__name__)
 
 
+def _get_session():
+    """Return a SQLAlchemy Session for commands that manage commit/rollback manually."""
+    from ..storage.db import get_session_factory
+
+    return get_session_factory()()
+
+
 @click.group()
 @click.version_option(version="0.1.0", prog_name="kmp-repair")
 def main() -> None:
@@ -235,6 +242,7 @@ def report_cmd(output_dir: str, fmt: str, modes: str | None, cases: str | None) 
 @main.command("doctor")
 def doctor() -> None:
     """Check environment, dependencies, and configuration."""
+    import os
     import shutil
     import sys
 
@@ -262,11 +270,30 @@ def doctor() -> None:
     except ImportError:
         check("tree-sitter-kotlin", False, "regex fallback will be used")
 
-    try:
-        import anthropic  # noqa: F401
-        check("anthropic SDK", True)
-    except ImportError:
-        check("anthropic SDK", False, "needed for Phase 9 (repair agents)")
+    llm_fake = os.environ.get("KMP_LLM_FAKE") == "1"
+    llm_provider = os.environ.get("KMP_LLM_PROVIDER", "anthropic").strip().lower()
+
+    if llm_fake:
+        check("LLM provider mode", True, "KMP_LLM_FAKE=1 (no external provider required)")
+    elif llm_provider in ("vertex", "gemini"):
+        try:
+            from google import genai  # noqa: F401
+            check("google-genai SDK", True)
+        except ImportError:
+            check("google-genai SDK", False, "needed for Vertex Gemini provider")
+
+        has_project = bool(
+            os.environ.get("KMP_VERTEX_PROJECT")
+            or os.environ.get("GCP_PROJECT_ID")
+            or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        )
+        check("Vertex project configured", has_project, "set KMP_VERTEX_PROJECT or GCP_PROJECT_ID")
+    else:
+        try:
+            import anthropic  # noqa: F401
+            check("anthropic SDK", True)
+        except ImportError:
+            check("anthropic SDK", False, "needed for Anthropic provider")
 
     try:
         import sqlalchemy  # noqa: F401
@@ -341,8 +368,16 @@ def _not_implemented(name: str) -> None:
 
 
 @main.command("discover")
-@click.option("--min-stars", default=5, show_default=True,
+@click.option("--min-stars", default=100, show_default=True,
               help="Minimum star count for a repository to be included.")
+@click.option("--min-commits", default=250, show_default=True,
+              help="Minimum commit count estimate from non-bot contributors.")
+@click.option("--min-contributors", default=3, show_default=True,
+              help="Minimum number of non-bot contributors.")
+@click.option("--active-months", default=18, show_default=True,
+              help="Require at least one non-bot commit in this recent window.")
+@click.option("--strict-targets/--no-strict-targets", default=True, show_default=True,
+              help="Require repositories to declare commonMain + androidMain + iosMain.")
 @click.option("--max-repos", default=50, show_default=True,
               help="Maximum number of repositories to return.")
 @click.option("--max-prs", default=10, show_default=True,
@@ -353,6 +388,10 @@ def _not_implemented(name: str) -> None:
               default="text", show_default=True)
 def discover(
     min_stars: int,
+    min_commits: int,
+    min_contributors: int,
+    active_months: int,
+    strict_targets: bool,
     max_repos: int,
     max_prs: int,
     single_repo: str | None,
@@ -385,7 +424,15 @@ def discover(
                 click.echo(f"{single_repo}: no open Dependabot PRs found")
         return
 
-    results = _discover(min_stars=min_stars, max_repos=max_repos, max_prs_per_repo=max_prs)
+    results = _discover(
+        min_stars=min_stars,
+        min_commits=min_commits,
+        min_non_bot_contributors=min_contributors,
+        active_months=active_months,
+        require_kmp_targets=strict_targets,
+        max_repos=max_repos,
+        max_prs_per_repo=max_prs,
+    )
 
     if output_format == "json":
         click.echo(
@@ -614,9 +661,18 @@ def analyze_case_cmd(case_id: str) -> None:
               help="Skip the LocalizationAgent — use deterministic scoring only.")
 @click.option("--top-k", default=10, show_default=True,
               help="Maximum candidates to persist and display.")
+@click.option("--provider", default=None,
+              type=click.Choice(["anthropic", "vertex"], case_sensitive=False),
+              help="LLM provider override (default: KMP_LLM_PROVIDER env).")
 @click.option("--model", default=None,
               help="Override LLM model ID (default: claude-sonnet-4-6).")
-def localize_cmd(case_id: str, no_agent: bool, top_k: int, model: str | None) -> None:
+def localize_cmd(
+    case_id: str,
+    no_agent: bool,
+    top_k: int,
+    provider: str | None,
+    model: str | None,
+) -> None:
     """[Phase 8] Run hybrid impact localization on a repair case.
 
     \b
@@ -631,16 +687,16 @@ def localize_cmd(case_id: str, no_agent: bool, top_k: int, model: str | None) ->
     from pathlib import Path
     from ..localization.localizer import localize
     from ..storage.db import get_session
-    from ..utils.llm_provider import ClaudeProvider
+    from ..utils.llm_provider import get_default_provider
 
-    provider = ClaudeProvider(model_id=model) if model else None
+    provider_impl = get_default_provider(model_id=model, provider_name=provider) if (model or provider) else None
 
     with get_session() as session:
         result = localize(
             case_id=case_id,
             session=session,
             use_agent=not no_agent,
-            provider=provider,
+            provider=provider_impl,
             top_k=top_k,
         )
 
@@ -665,8 +721,17 @@ def localize_cmd(case_id: str, no_agent: bool, top_k: int, model: str | None) ->
 @click.option("--artifact-base", default="data/artifacts", show_default=True)
 @click.option("--top-k", default=5, show_default=True,
               help="Number of localized files to include in the repair context.")
+@click.option("--provider", default=None,
+              type=click.Choice(["anthropic", "vertex"], case_sensitive=False),
+              help="LLM provider override (default: KMP_LLM_PROVIDER env).")
 @click.option("--model", default=None,
               help="Override LLM model ID.")
+@click.option("--patch-strategy",
+              type=click.Choice(["single_diff", "chain_by_file"], case_sensitive=False),
+              default="single_diff", show_default=True,
+              help="How to apply generated patches: one full diff or file-by-file chain.")
+@click.option("--force-patch-attempt/--no-force-patch-attempt", default=True, show_default=True,
+              help="Retry once with a forced best-effort diff when the agent returns PATCH_IMPOSSIBLE.")
 @click.option("--all-baselines", is_flag=True, default=False,
               help="Run all four baseline modes sequentially.")
 def repair_cmd(
@@ -674,7 +739,10 @@ def repair_cmd(
     mode: str,
     artifact_base: str,
     top_k: int,
+    provider: str | None,
     model: str | None,
+    patch_strategy: str,
+    force_patch_attempt: bool,
     all_baselines: bool,
 ) -> None:
     """[Phase 9] Synthesize a repair patch for a localized case.
@@ -686,9 +754,9 @@ def repair_cmd(
       kmp-repair repair <case_id> --all-baselines
     """
     from pathlib import Path
-    from ..utils.llm_provider import ClaudeProvider
+    from ..utils.llm_provider import get_default_provider
 
-    provider = ClaudeProvider(model_id=model) if model else None
+    provider_impl = get_default_provider(model_id=model, provider_name=provider) if (model or provider) else None
 
     if all_baselines:
         from ..baselines.baseline_runner import run_all_baselines
@@ -699,8 +767,10 @@ def repair_cmd(
                 case_id=case_id,
                 session=session,
                 artifact_base=Path(artifact_base),
-                provider=provider,
+                provider=provider_impl,
                 top_k=top_k,
+                patch_strategy=patch_strategy,
+                force_patch_attempt=force_patch_attempt,
             )
         click.echo(f"Case {case_id[:8]} — all baselines:")
         for bmode, result in results.items():
@@ -716,11 +786,13 @@ def repair_cmd(
             session=session,
             artifact_base=Path(artifact_base),
             repair_mode=mode,
-            provider=provider,
+            provider=provider_impl,
             top_k=top_k,
+            patch_strategy=patch_strategy,
+            force_patch_attempt=force_patch_attempt,
         )
 
-    click.echo(f"Case {case_id[:8]} repair (mode={mode}):")
+    click.echo(f"Case {case_id[:8]} repair (mode={mode}, strategy={result.patch_strategy}):")
     click.echo(f"  status         : {result.bundle.meta.status}")
     click.echo(f"  attempt        : {result.attempt_number}")
     click.echo(f"  patch_status   : {result.patch_status}")
@@ -769,13 +841,16 @@ def validate_cmd(case_id: str, attempt_id: str | None, targets: str | None, arti
 @main.command("explain")
 @click.argument("case_id")
 @click.option("--artifact-base", default="data/artifacts", show_default=True, help="Artifact store root.")
+@click.option("--provider", default=None,
+              type=click.Choice(["anthropic", "vertex"], case_sensitive=False),
+              help="LLM provider override (default: KMP_LLM_PROVIDER env).")
 @click.option("--model", default=None, help="Override LLM model ID.")
-def explain_cmd(case_id: str, artifact_base: str, model: str | None) -> None:
+def explain_cmd(case_id: str, artifact_base: str, provider: str | None, model: str | None) -> None:
     """[Phase 11] Generate a reviewer-oriented explanation for a repair case."""
     from ..explanation.explainer import explain as run_explain
-    from ..utils.llm_provider import ClaudeProvider, get_default_provider
+    from ..utils.llm_provider import get_default_provider
 
-    provider = ClaudeProvider(model_id=model) if model else get_default_provider()
+    provider_impl = get_default_provider(model_id=model, provider_name=provider)
 
     session = _get_session()
     try:
@@ -783,7 +858,7 @@ def explain_cmd(case_id: str, artifact_base: str, model: str | None) -> None:
             case_id=case_id,
             session=session,
             artifact_base=Path(artifact_base),
-            provider=provider,
+            provider=provider_impl,
         )
         session.commit()
         click.echo(f"Explanation generated (model={result.model_id})")

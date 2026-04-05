@@ -74,6 +74,7 @@ class ArtifactStore:
         """Write stdout and stderr to disk. Returns (stdout_path, stdout_sha256, stderr_path, stderr_sha256)."""
         out_path = self.task_stdout_path(revision_type, task_name)
         err_path = self.task_stderr_path(revision_type, task_name)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(stdout, encoding="utf-8")
         err_path.write_text(stderr, encoding="utf-8")
         return (

@@ -239,3 +239,94 @@ class TestRunTasks:
 
         with pytest.raises(FileNotFoundError):
             run_tasks(tmp_path / "no-repo", ["build"])
+
+    def test_env_extra_is_forwarded_to_subprocess(self, tmp_path: Path) -> None:
+        """env_extra dict is merged into subprocess environment."""
+        from kmp_repair_pipeline.runners.gradle_runner import run_tasks
+
+        # gradlew prints the value of JAVA_HOME_TEST from its env
+        gradlew = tmp_path / "gradlew"
+        gradlew.write_text("#!/bin/sh\necho \"JAVA=$JAVA_HOME_TEST\"\nexit 0\n")
+        gradlew.chmod(0o755)
+
+        results = run_tasks(tmp_path, ["tasks"], timeout_s=30,
+                            env_extra={"JAVA_HOME_TEST": "sentinel-value"})
+        assert "sentinel-value" in results[0].stdout
+
+
+class TestLocalPropertiesHelper:
+    def test_write_creates_file(self, tmp_path: Path) -> None:
+        from kmp_repair_pipeline.runners.env_detector import _write_local_properties
+
+        _write_local_properties(tmp_path, "/some/sdk")
+        content = (tmp_path / "local.properties").read_text()
+        assert "sdk.dir=/some/sdk" in content
+
+    def test_write_idempotent(self, tmp_path: Path) -> None:
+        from kmp_repair_pipeline.runners.env_detector import _write_local_properties
+
+        _write_local_properties(tmp_path, "/some/sdk")
+        _write_local_properties(tmp_path, "/some/sdk")
+        content = (tmp_path / "local.properties").read_text()
+        assert content.count("sdk.dir=") == 1
+
+    def test_write_updates_stale_value(self, tmp_path: Path) -> None:
+        from kmp_repair_pipeline.runners.env_detector import _write_local_properties
+
+        (tmp_path / "local.properties").write_text("sdk.dir=/old/sdk\n")
+        _write_local_properties(tmp_path, "/new/sdk")
+        content = (tmp_path / "local.properties").read_text()
+        assert "/new/sdk" in content
+        assert "/old/sdk" not in content
+
+
+class TestNoOpDetectionInExecution:
+    def test_zero_errors_sets_no_errors_to_fix_status(self) -> None:
+        """run_before_after sets case status to NO_ERRORS_TO_FIX when after has 0 errors."""
+        from kmp_repair_pipeline.runners.execution_runner import run_before_after
+        from kmp_repair_pipeline.case_bundle.bundle import CaseBundle, CaseMeta
+
+        bundle = CaseBundle(
+            meta=CaseMeta(
+                case_id="no-err-case",
+                event_id="ev-1",
+                repository_url="https://github.com/test/repo",
+                status="SHADOW_BUILT",
+            )
+        )
+
+        set_status_calls: list[str] = []
+
+        def fake_set_status(case_row, status: str) -> None:
+            set_status_calls.append(status)
+
+        session = MagicMock()
+
+        with (
+            patch("kmp_repair_pipeline.runners.execution_runner.from_db_case", return_value=bundle),
+            patch("kmp_repair_pipeline.runners.execution_runner.RevisionRepo") as MockRev,
+            patch("kmp_repair_pipeline.runners.execution_runner.detect") as MockDetect,
+            patch("kmp_repair_pipeline.runners.execution_runner._run_revision",
+                  return_value=([], [])),
+            patch("kmp_repair_pipeline.runners.execution_runner.to_db"),
+            patch("kmp_repair_pipeline.runners.execution_runner.RepairCaseRepo") as MockCase,
+            patch("kmp_repair_pipeline.runners.execution_runner._reset_workspace_path"),
+            patch("kmp_repair_pipeline.runners.execution_runner._write_local_properties"),
+        ):
+            rev_mock = MagicMock()
+            rev_mock.local_path = "/tmp/after"
+            MockRev.return_value.get.return_value = rev_mock
+            env = MagicMock()
+            env.is_macos = True
+            env.java_home = ""
+            env.runnable_targets = ["shared"]
+            env.unavailable_targets = {}
+            env.android_sdk_available = False
+            env.as_metadata_dict.return_value = {}
+            MockDetect.return_value = env
+            MockCase.return_value.get_by_id.return_value = MagicMock()
+            MockCase.return_value.set_status.side_effect = fake_set_status
+
+            run_before_after("no-err-case", session)
+
+        assert "NO_ERRORS_TO_FIX" in set_status_calls

@@ -615,7 +615,7 @@ kmp-repair-pipeline/
 ├── migrations/
 │   └── versions/                Alembic migration files (c4beede → a1b2c3d → 1c03c4a → d7e8f9a)
 ├── tests/
-│   ├── unit/                    341 passing tests (no network, no Docker)
+│   ├── unit/                    353 passing tests (no network, no Docker)
 │   └── integration/             DB schema + bundle rehydration (requires Docker)
 ├── data/
 │   └── artifacts/               Local artifact store (gitignored except .gitkeep)
@@ -659,7 +659,7 @@ pytest tests/integration/ -v
 pytest tests/unit/ --cov=kmp_repair_pipeline --cov-report=term-missing
 ```
 
-**Test counts**: 341 unit tests across 16 test files, 0 external dependencies required.
+**Test counts**: 353 unit tests across 16 test files, 0 external dependencies required.
 
 ---
 
@@ -696,7 +696,7 @@ These are documented gaps — the pipeline degrades gracefully rather than crash
 | Gap | Risk | Mitigation |
 |-----|------|-----------|
 | Per-task timeout (600 s) | Total validation time = sum across tasks (unbounded) | Set `--timeout` flag; large projects may take 20+ minutes |
-| Unpatched workspace if Phase 9 skipped | Validate runs on original code → false SUCCESS | **Improved**: patch presence check (`_verify_patch_present`) runs before each target and warns if touched files are absent from `git diff` |
+| Unpatched workspace if Phase 9 skipped | Validate runs on original code → false SUCCESS | **Improved**: patch presence check (`_verify_patch_present`) warns; workspace is always reset to HEAD after validate exits |
 | iOS only on macOS | iOS KLIB fix never fully validated on Linux CI | `NOT_RUN_ENVIRONMENT_UNAVAILABLE` recorded; `target_coverage_complete = false` in explanation |
 
 ### Breaking Change Types Not Fully Covered
@@ -724,9 +724,14 @@ The pipeline focuses on the Kotlin version / KLIB ABI class of breaking change. 
 - **Auditable** — every agent call logged with prompt, response, token counts, model ID, latency
 - **Reproducible** — same inputs → same outputs; `temperature=0.0` enforced in code; all state persisted to DB before exit
 - **No cloud** — PostgreSQL via Docker Compose, artifacts local under `data/artifacts/`
-- **Workspace isolation** — `git checkout -- . && git clean -fd` before every baseline mode and between retry attempts within a mode; `WorkspaceLock` (fcntl.flock) prevents concurrent access
+- **Workspace isolation** — `git checkout -- . && git clean -fd` before every baseline mode, between retry attempts, and after every validate call; `WorkspaceLock` (fcntl.flock) prevents concurrent access
+- **Idempotent re-runs** — `run-before-after` resets both before and after workspaces at the start; `--fresh` also deletes existing execution_runs rows (soft reset without re-cloning)
 - **Atomic chain_by_file patching** — on failure, all applied file blocks are reverted before returning; workspace left clean
 - **Patch presence verification** — validation warns (non-blocking) when expected touched files are absent from `git diff`
+- **No-op detection** — `run-before-after` sets `NO_ERRORS_TO_FIX` when after-state has 0 errors; `metrics` auto-scores BSR=CTSR=FFSR=1.0
+- **Validate-in-loop** — `baseline_runner` calls `validate` after each APPLIED patch; REJECTED+progress → repatch with remaining errors in context
+- **Anti-downgrade scanner** — `_check_no_version_downgrade` rejects diffs that lower a TOML version alias before `git apply`
+- **JAVA_HOME forwarding** — `env_extra={"JAVA_HOME": env.java_home}` passed to all `run_tasks()` calls; prevents Java 25 crash in Kotlin 2.x compiler
 - **Build-file evidence first** — `libs.versions.toml` is the first entry in `build_file_contents` sent to RepairAgent; version bump opportunities are immediately visible
 - **Anti-hallucination** — repair prompts show the exact current value AND required target value from the version catalog; agents are instructed to use verbatim context lines only
 

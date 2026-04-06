@@ -543,7 +543,18 @@ class TestRunBaseline:
             r.attempt_number = call_count
             return r
 
-        with patch("kmp_repair_pipeline.baselines.baseline_runner.repair", side_effect=fake_repair):
+        # Fake validate result — VALIDATED so the loop exits cleanly.
+        fake_val = MagicMock()
+        fake_val.patch_status = "VALIDATED"
+        fake_val.target_results = []
+
+        with (
+            patch("kmp_repair_pipeline.baselines.baseline_runner.repair", side_effect=fake_repair),
+            patch("kmp_repair_pipeline.baselines.baseline_runner._collect_original_error_keys",
+                  return_value=frozenset()),
+            patch("kmp_repair_pipeline.baselines.baseline_runner._validate_in_loop",
+                  return_value=fake_val),
+        ):
             session = MagicMock()
             result = run_baseline("case-1", session, mode="iterative_agentic")
 
@@ -554,3 +565,118 @@ class TestRunBaseline:
         from kmp_repair_pipeline.baselines.baseline_runner import run_baseline
         with pytest.raises(ValueError, match="Unknown baseline mode"):
             run_baseline("case-1", MagicMock(), mode="invalid_mode")
+
+    def test_validate_in_loop_validated_breaks(self) -> None:
+        """When validate returns VALIDATED the loop stops immediately."""
+        from kmp_repair_pipeline.baselines.baseline_runner import run_baseline
+
+        def fake_repair(*args, **kwargs):
+            r = MagicMock()
+            r.patch_status = "APPLIED"
+            r.attempt_number = 1
+            return r
+
+        val = MagicMock()
+        val.patch_status = "VALIDATED"
+        val.target_results = []
+
+        with (
+            patch("kmp_repair_pipeline.baselines.baseline_runner.repair", side_effect=fake_repair),
+            patch("kmp_repair_pipeline.baselines.baseline_runner._collect_original_error_keys",
+                  return_value=frozenset()),
+            patch("kmp_repair_pipeline.baselines.baseline_runner._validate_in_loop",
+                  return_value=val) as mock_val,
+        ):
+            result = run_baseline("case-1", MagicMock(), mode="raw_error")
+
+        assert result.applied is True
+        mock_val.assert_called_once()
+
+    def test_validate_in_loop_rejected_no_progress_stops(self) -> None:
+        """REJECTED with same error keys as original → no retry."""
+        from kmp_repair_pipeline.baselines.baseline_runner import run_baseline
+
+        repair_count = 0
+
+        def fake_repair(*args, **kwargs):
+            nonlocal repair_count
+            repair_count += 1
+            r = MagicMock()
+            r.patch_status = "APPLIED"
+            return r
+
+        err_key = frozenset({("COMPILE_ERROR", "Foo.kt", "error")})
+
+        val = MagicMock()
+        val.patch_status = "REJECTED"
+        err_obs = MagicMock()
+        err_obs.error_type = "COMPILE_ERROR"
+        err_obs.file_path = "Foo.kt"
+        err_obs.message = "error"
+        tv = MagicMock()
+        tv.error_observations = [err_obs]
+        val.target_results = [tv]
+
+        with (
+            patch("kmp_repair_pipeline.baselines.baseline_runner.repair", side_effect=fake_repair),
+            patch("kmp_repair_pipeline.baselines.baseline_runner._collect_original_error_keys",
+                  return_value=err_key),
+            patch("kmp_repair_pipeline.baselines.baseline_runner._validate_in_loop",
+                  return_value=val),
+            patch("kmp_repair_pipeline.baselines.baseline_runner._store_remaining_in_retry_reason"),
+        ):
+            result = run_baseline("case-1", MagicMock(), mode="raw_error")
+
+        # Only one repair call — no-progress REJECTED stops the loop
+        assert repair_count == 1
+
+
+class TestAntiDowngradeScanner:
+    def test_clean_diff_passes(self) -> None:
+        from kmp_repair_pipeline.repair.repairer import _check_no_version_downgrade
+
+        diff = textwrap.dedent("""\
+            --- a/gradle/libs.versions.toml
+            +++ b/gradle/libs.versions.toml
+            @@ -1,4 +1,4 @@
+             [versions]
+            -kotlin = "2.1.0"
+            +kotlin = "2.3.0"
+        """)
+        ok, reason = _check_no_version_downgrade(diff)
+        assert ok, reason
+
+    def test_downgrade_detected(self) -> None:
+        from kmp_repair_pipeline.repair.repairer import _check_no_version_downgrade
+
+        diff = textwrap.dedent("""\
+            --- a/gradle/libs.versions.toml
+            +++ b/gradle/libs.versions.toml
+            @@ -1,4 +1,4 @@
+             [versions]
+            -kotlin = "2.3.0"
+            +kotlin = "2.1.0"
+        """)
+        ok, reason = _check_no_version_downgrade(diff)
+        assert not ok
+        assert "kotlin" in reason
+        assert "downgrade" in reason
+
+    def test_non_version_line_not_flagged(self) -> None:
+        from kmp_repair_pipeline.repair.repairer import _check_no_version_downgrade
+
+        diff = textwrap.dedent("""\
+            --- a/src/Main.kt
+            +++ b/src/Main.kt
+            @@ -1,4 +1,4 @@
+            -val x = "2.3.0"
+            +val x = "2.1.0"
+        """)
+        # Not a TOML alias line — should not be flagged
+        ok, _ = _check_no_version_downgrade(diff)
+        assert ok
+
+    def test_empty_diff_passes(self) -> None:
+        from kmp_repair_pipeline.repair.repairer import _check_no_version_downgrade
+        ok, reason = _check_no_version_downgrade("")
+        assert ok

@@ -59,6 +59,9 @@ CRITICAL — Build-file fixes:
      +kotlin = "2.3.0"
 8. Always check the Current Version Catalog section in the prompt before
    deciding whether a build-file version bump fixes the error.
+9. NEVER lower (downgrade) any version number in libs.versions.toml or any
+   build file. If your diff decreases a version string (e.g. "2.3.0" → "2.1.0"),
+   it is wrong. Only bumps (increases) are valid fixes.
 """
 
 _FORCE_PATCH_APPENDIX = """\

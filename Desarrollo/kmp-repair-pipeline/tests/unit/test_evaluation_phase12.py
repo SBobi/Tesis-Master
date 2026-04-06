@@ -475,3 +475,54 @@ class TestEvaluate:
         by_mode = {m.repair_mode: m for m in result.metrics}
         assert by_mode["raw_error"].bsr == 0.0
         assert by_mode["full_thesis"].bsr == 1.0
+
+
+class TestNoOpAutoScoring:
+    """When after-state has 0 errors, evaluator auto-scores all modes BSR=1."""
+
+    def test_no_original_errors_auto_scores_all_modes(self) -> None:
+        from kmp_repair_pipeline.evaluation.evaluator import evaluate
+        from kmp_repair_pipeline.case_bundle.bundle import CaseBundle, CaseMeta
+        from kmp_repair_pipeline.case_bundle.evidence import (
+            ExecutionEvidence, RevisionExecution,
+        )
+
+        # Bundle with 0 after-state errors
+        bundle = CaseBundle(
+            meta=CaseMeta(
+                case_id="no-op-case",
+                event_id="ev-1",
+                repository_url="https://github.com/test/repo",
+                status="EXECUTED",
+            )
+        )
+        after_exec = RevisionExecution(
+            revision_type="after",
+            profile="macos-full",
+            overall_status=ValidationStatus.SUCCESS_REPOSITORY_LEVEL,
+            task_outcomes=[],
+            error_observations=[],
+            env_metadata={},
+        )
+        bundle.execution = ExecutionEvidence(before=None, after=after_exec)
+
+        session = MagicMock()
+
+        with (
+            patch("kmp_repair_pipeline.evaluation.evaluator.from_db_case", return_value=bundle),
+            patch("kmp_repair_pipeline.evaluation.evaluator.EvaluationMetricRepo") as MockMetric,
+            patch("kmp_repair_pipeline.evaluation.evaluator.RepairCaseRepo") as MockCase,
+        ):
+            MockMetric.return_value.upsert.return_value = MagicMock()
+            MockCase.return_value.get_by_id.return_value = MagicMock()
+
+            result = evaluate(case_id="no-op-case", session=session)
+
+        # Should produce metrics for all 4 baseline modes
+        assert len(result.metrics) == 4
+        for m in result.metrics:
+            assert m.bsr == 1.0
+            assert m.ctsr == 1.0
+            assert m.ffsr == 1.0
+            assert m.efr is None
+            assert m.efr_normalized is None

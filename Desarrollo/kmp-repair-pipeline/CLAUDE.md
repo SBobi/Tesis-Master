@@ -5,7 +5,7 @@
 A multi-agent pipeline to **repair breaking changes caused by dependency updates in Kotlin Multiplatform (KMP)** repositories.
 Thesis: *"A Multi-Agent System to Repair Breaking Changes Caused by Dependency Updates in Kotlin Multiplatform"*
 
-All 13 phases are implemented and tested (341/341 unit tests passing).
+All 13 phases are implemented and tested (353/353 unit tests passing).
 
 ---
 
@@ -101,8 +101,12 @@ Error deduplication key: `(error_type, file_path, line, message)` for EFR; `(err
 ```
 CREATED → SHADOW_BUILT → EXECUTED → LOCALIZED → PATCH_ATTEMPTED
        → VALIDATED → EXPLAINED → EVALUATED
+       EXECUTED → NO_ERRORS_TO_FIX → EVALUATED  (non-breaking update shortcut)
        (any stage → FAILED on unrecoverable error)
 ```
+
+`NO_ERRORS_TO_FIX` is set by `run-before-after` when the after-state compiles with 0 errors.
+The repair and validate phases are skipped entirely; `metrics` auto-scores BSR=CTSR=FFSR=1.0.
 
 ---
 
@@ -177,6 +181,33 @@ d7e8f9a0b1c2  add symbol_name to error_observations + efr_normalized to evaluati
 
 ---
 
+## Workspace isolation and idempotency
+
+The pipeline guarantees clean state at every phase boundary:
+
+- **`run-before-after`**: At the start, resets BOTH before and after workspaces to HEAD (`git checkout -- . && git clean -fd`) to discard any stale patches from previous runs. Use `--fresh` to also delete existing `execution_runs` rows and reset status to `SHADOW_BUILT` for a full soft-reset without re-cloning.
+- **`validate`**: Resets the after-clone to HEAD after validation completes (whether VALIDATED or REJECTED). The patch is persisted in the DB and artifact store — the workspace copy is disposable.
+- **`baseline_runner`**: Resets before each mode, between retries within a mode, and at the end of `run_all_baselines`. No cross-mode contamination.
+
+## No-op detection (non-breaking updates)
+
+When `run-before-after` finds 0 errors in the after-state, it sets case status to `NO_ERRORS_TO_FIX`. Downstream behaviour:
+- `repair` CLI prints a message and returns without calling agents.
+- `metrics` auto-scores all four baseline modes BSR=1.0 / CTSR=1.0 / FFSR=1.0 / EFR=N/A without requiring any repair or validate runs.
+
+## Validate-in-loop (repair → validate cycle)
+
+`baseline_runner.run_baseline()` now calls `validate()` immediately after each APPLIED patch:
+- **VALIDATED** → done, exit loop.
+- **REJECTED, same errors as original** → no progress, exit loop.
+- **REJECTED, fewer errors than original** → progress detected; remaining errors are stored in `patch_attempt.retry_reason` as JSON and surfaced in `repair_context["previous_attempts"]` for the next agent call; loop continues with remaining budget.
+
+Workspace is reset between every repair+validate cycle.
+
+## Anti-downgrade scanner
+
+`repairer._check_no_version_downgrade(diff_text)` scans TOML version alias lines in unified diffs.  If any alias is lowered (e.g. `"2.3.0"` → `"2.1.0"`), the diff is rejected with `FAILED_APPLY` before `git apply` is attempted.  The RepairAgent system prompt also contains an explicit rule (rule 9) prohibiting version downgrades.
+
 ## Java version requirement
 
 **Always use Java 21 (Temurin)** for all pipeline runs. Java 25 causes a hard crash:
@@ -203,7 +234,7 @@ The `.env` file sets `JAVA_HOME` to the Temurin 21 installation. Always load it.
 
 ## Android SDK / local.properties
 
-The pipeline auto-writes `local.properties` with `sdk.dir` whenever the Android SDK is detected during `run-before-after` or `validate`. This mirrors how Gradle itself finds the SDK.
+The pipeline auto-writes `local.properties` with `sdk.dir` to **both** the before and after workspaces whenever the Android SDK is detected during `run-before-after` or `validate`. This mirrors how Gradle itself finds the SDK and prevents the "pre-existing Android build failure" caused by the before workspace missing `local.properties`.
 
 Priority order for SDK detection:
 1. `ANDROID_HOME` or `ANDROID_SDK_ROOT` env var
@@ -233,7 +264,8 @@ kmp-repair --help
 kmp-repair discover --repo owner/repo
 kmp-repair ingest --repo owner/repo --pr-number 42
 kmp-repair build-case <event_id>
-kmp-repair run-before-after <case_id>
+kmp-repair run-before-after <case_id>              # standard run
+kmp-repair run-before-after <case_id> --fresh      # soft-reset: delete existing execution_runs first
 kmp-repair analyze-case <case_id>
 kmp-repair localize <case_id>
 kmp-repair repair <case_id> --all-baselines
@@ -395,10 +427,12 @@ These are documented limitations. Do NOT silently work around them — document 
 ### Patch application
 - **`chain_by_file` partial apply**: Fixed — if the second file fails, all previously applied blocks are reverted in reverse order via `revert_patch`. The workspace is left clean.
 - **Workspace lock**: `WorkspaceLock` (`utils/workspace_lock.py`) wraps every `repair()` call with an exclusive `fcntl.flock` to prevent concurrent CLI invocations corrupting the same workspace. Default timeout 30 s.
+- **Anti-downgrade scanner**: `_check_no_version_downgrade` in `repairer.py` rejects diffs that lower a TOML version alias. Patched to run before `git apply`.
 
 ### Validation
 - **Timeout is per-task, not per-case**: Total validation time = sum across all tasks across all targets. For large KMP projects this can exceed 30 minutes.
 - **Workspace assumption**: `validate` now runs a **patch presence check** (`_verify_patch_present`) before each target. If none of the expected touched files appear in `git diff --name-only`, a WARNING is logged. Validation continues (non-blocking) but the log surfaces the misconfiguration.
+- **Workspace reset after validate**: `validate()` always resets the after-clone to HEAD on exit. The patch survives in DB + artifact store.
 
 ### Evaluation
 - **EFR deduplication key** includes the line number. If a patch moves an error to a different line but keeps the same message, standard EFR counts it as fixed. Use `efr_normalized` (dedup key without line) for a conservative lower-bound estimate.

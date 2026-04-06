@@ -254,32 +254,43 @@ def _repair_inner(
                 case_id[:8], attempt_number, patch_strategy, precheck_error,
             )
         else:
-            # Apply to after-clone
-            if patch_strategy == "chain_by_file":
-                apply_result = _apply_patch_chain_by_file(diff_text_for_attempt, after_path)
-            else:
-                apply_result = apply_patch(diff_text_for_attempt, after_path)
-            if apply_result.success:
-                patch_status = "APPLIED"
-                if forced_retry_used:
-                    retry_reason = _strategy_retry_reason(patch_strategy, "forced patch retry used")
-                else:
-                    retry_reason = _strategy_retry_reason(patch_strategy)
-                log.info(
-                    "Case %s attempt %d: patch applied (%d files, strategy=%s)",
-                    case_id[:8], attempt_number, len(apply_result.touched_files), patch_strategy,
-                )
-            else:
+            # Anti-downgrade check — reject patches that lower version numbers.
+            downgrade_ok, downgrade_error = _check_no_version_downgrade(diff_text_for_attempt)
+            if not downgrade_ok:
                 patch_status = "FAILED_APPLY"
-                apply_detail = apply_result.stderr
-                if forced_retry_used:
-                    apply_detail = f"forced patch retry used; {apply_result.stderr}"
-                retry_reason = _strategy_retry_reason(patch_strategy, apply_detail)
+                touched = extract_touched_files(diff_text_for_attempt) or agent_out.touched_files
+                retry_reason = _strategy_retry_reason(patch_strategy, f"version downgrade rejected: {downgrade_error}")
                 log.warning(
-                    "Case %s attempt %d: patch failed to apply (strategy=%s) — %s",
-                    case_id[:8], attempt_number, patch_strategy, apply_result.stderr[:200],
+                    "Case %s attempt %d: diff rejected by anti-downgrade scanner — %s",
+                    case_id[:8], attempt_number, downgrade_error,
                 )
-            touched = apply_result.touched_files or extract_touched_files(diff_text_for_attempt) or agent_out.touched_files
+            else:
+                # Apply to after-clone
+                if patch_strategy == "chain_by_file":
+                    apply_result = _apply_patch_chain_by_file(diff_text_for_attempt, after_path)
+                else:
+                    apply_result = apply_patch(diff_text_for_attempt, after_path)
+                if apply_result.success:
+                    patch_status = "APPLIED"
+                    if forced_retry_used:
+                        retry_reason = _strategy_retry_reason(patch_strategy, "forced patch retry used")
+                    else:
+                        retry_reason = _strategy_retry_reason(patch_strategy)
+                    log.info(
+                        "Case %s attempt %d: patch applied (%d files, strategy=%s)",
+                        case_id[:8], attempt_number, len(apply_result.touched_files), patch_strategy,
+                    )
+                else:
+                    patch_status = "FAILED_APPLY"
+                    apply_detail = apply_result.stderr
+                    if forced_retry_used:
+                        apply_detail = f"forced patch retry used; {apply_result.stderr}"
+                    retry_reason = _strategy_retry_reason(patch_strategy, apply_detail)
+                    log.warning(
+                        "Case %s attempt %d: patch failed to apply (strategy=%s) — %s",
+                        case_id[:8], attempt_number, patch_strategy, apply_result.stderr[:200],
+                    )
+                touched = apply_result.touched_files or extract_touched_files(diff_text_for_attempt) or agent_out.touched_files
 
     # --- Persist patch_attempt row ----------------------------------------
     attempt_row = PatchAttemptRepo(session).create(
@@ -482,6 +493,61 @@ def _precheck_unified_diff(diff_text: str) -> tuple[bool, str]:
         return False, "final file block missing hunk header '@@'"
     if not saw_file:
         return False, "missing file headers ('---' / '+++')"
+    return True, ""
+
+
+def _check_no_version_downgrade(diff_text: str) -> tuple[bool, str]:
+    """Reject a diff that lowers any version string in a version-catalog file.
+
+    Scans removed lines (``-foo = "X"`` → ``+foo = "Y"`` pairs) in files that
+    look like ``libs.versions.toml`` or ``build.gradle.kts``.  When a version
+    alias is **decreased** (e.g. "2.3.0" → "2.1.0"), the diff is rejected.
+
+    Returns (True, "") when clean; (False, reason) when a downgrade is found.
+    """
+    import re as _re
+
+    # A version string that looks like semver: digits.digits[.digits[.digits]]
+    _VER_RE = _re.compile(r'"(\d+\.\d+(?:\.\d+)*(?:[.\-]\w+)*)"')
+
+    def _to_tuple(v: str) -> tuple[int, ...]:
+        # Strip non-numeric suffix for comparison
+        nums = _re.split(r"[.\-]", v)
+        result = []
+        for n in nums:
+            try:
+                result.append(int(n))
+            except ValueError:
+                break
+        return tuple(result)
+
+    # Collect removed/added version strings keyed by the alias name,
+    # scoped to lines in version-catalog or build files.
+    removed: dict[str, str] = {}   # alias → version string
+
+    # We only check TOML version lines like:  -kotlin = "2.2.0"
+    _TOML_VER_LINE = _re.compile(r'^-\s*([\w-]+)\s*=\s*"(\d[\d.\-\w]+)"')
+    _TOML_VER_ADDED = _re.compile(r'^\+\s*([\w-]+)\s*=\s*"(\d[\d.\-\w]+)"')
+
+    for line in diff_text.splitlines():
+        m = _TOML_VER_LINE.match(line)
+        if m:
+            removed[m.group(1)] = m.group(2)
+            continue
+        m = _TOML_VER_ADDED.match(line)
+        if m:
+            alias, new_ver = m.group(1), m.group(2)
+            old_ver = removed.get(alias)
+            if old_ver is not None:
+                old_t = _to_tuple(old_ver)
+                new_t = _to_tuple(new_ver)
+                if old_t and new_t and new_t < old_t:
+                    return (
+                        False,
+                        f"anti-downgrade: alias '{alias}' would decrease from "
+                        f'"{old_ver}" to "{new_ver}"',
+                    )
+
     return True, ""
 
 

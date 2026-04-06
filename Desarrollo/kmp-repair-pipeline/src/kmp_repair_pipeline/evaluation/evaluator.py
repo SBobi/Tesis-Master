@@ -81,6 +81,51 @@ def evaluate(
             for c in bundle.repair.localization.candidates
         ]
 
+    # ── No-op shortcut: if there were 0 original errors, the update is   ──
+    # ── non-breaking — auto-score BSR/CTSR/FFSR=1.0, EFR=None for all   ──
+    # ── four baseline modes without requiring any repair/validate runs.  ──
+    if not original_errors:
+        from ..baselines.baseline_runner import BASELINE_MODES
+        log.info(
+            "Case %s has 0 original errors — auto-scoring NO_ERRORS_TO_FIX "
+            "metrics for all baseline modes",
+            case_id[:8],
+        )
+        results: list[CaseMetrics] = []
+        metric_repo = EvaluationMetricRepo(session)
+        for repair_mode in BASELINE_MODES:
+            m = CaseMetrics(
+                case_id=case_id,
+                repair_mode=repair_mode,
+                bsr=1.0,
+                ctsr=1.0,
+                ffsr=1.0,
+                efr=None,
+                efr_normalized=None,
+                hit_at_1=None,
+                hit_at_3=None,
+                hit_at_5=None,
+                source_set_accuracy=None,
+            )
+            metric_repo.upsert(
+                repair_case_id=case_id,
+                repair_mode=repair_mode,
+                bsr=1.0,
+                ctsr=1.0,
+                ffsr=1.0,
+                efr=None,
+                efr_normalized=None,
+                hit_at_1=None,
+                hit_at_3=None,
+                hit_at_5=None,
+                source_set_accuracy=None,
+            )
+            results.append(m)
+            log.info("Case %s mode=%s BSR=1.0 CTSR=1.0 FFSR=1.0 EFR=N/A [no-op]", case_id[:8], repair_mode)
+        case_row = RepairCaseRepo(session).get_by_id(case_id)
+        RepairCaseRepo(session).set_status(case_row, "EVALUATED")
+        return EvaluationRunResult(case_id=case_id, metrics=results)
+
     # ── Find all repair modes with patch attempts ────────────────────────
     attempt_repo = PatchAttemptRepo(session)
     all_attempts = attempt_repo.list_for_case(case_id)

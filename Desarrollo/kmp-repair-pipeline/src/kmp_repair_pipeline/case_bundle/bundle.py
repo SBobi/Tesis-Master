@@ -247,7 +247,7 @@ class CaseBundle(BaseModel):
             "localized_files": localized,
             "errors": [e.model_dump() for e in errors],
             "previous_attempts": [
-                {"attempt": p.attempt_number, "status": p.status, "reason": p.retry_reason}
+                _enrich_attempt_entry(p)
                 for p in (self.repair.patch_attempts if self.repair else [])
             ],
             # Parsed version catalog from libs.versions.toml — key tool for
@@ -303,6 +303,32 @@ class CaseBundle(BaseModel):
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+
+def _enrich_attempt_entry(p: "PatchAttempt") -> dict:
+    """Build the ``previous_attempts`` entry for one PatchAttempt.
+
+    For REJECTED attempts that carry a JSON ``retry_reason`` produced by the
+    validate-in-loop, the ``remaining_errors`` list is surfaced so the next
+    RepairAgent call can see exactly which errors survived.  For all other
+    attempts the entry is the same as before.
+    """
+    import json as _json
+
+    entry: dict = {
+        "attempt": p.attempt_number,
+        "status": p.status,
+        "reason": p.retry_reason,
+    }
+    if p.status == "REJECTED" and p.retry_reason:
+        try:
+            parsed = _json.loads(p.retry_reason)
+            remaining = parsed.get("remaining_errors")
+            if remaining is not None:
+                entry["remaining_errors"] = remaining
+        except (ValueError, TypeError):
+            pass  # plain-text retry_reason — leave entry as-is
+    return entry
 
 
 def _max_kotlin_version(versions: list[Optional[str]]) -> Optional[str]:

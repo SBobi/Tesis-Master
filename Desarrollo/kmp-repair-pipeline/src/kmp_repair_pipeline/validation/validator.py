@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from ..runners.execution_runner import _reset_workspace_path
+
 from sqlalchemy.orm import Session
 
 from ..case_bundle.bundle import CaseBundle
@@ -130,6 +132,9 @@ def validate(
     # ── Environment detection ───────────────────────────────────────────────
     env = detect(repo_path)
     effective_targets = targets or env.runnable_targets
+    # Forward JAVA_HOME so Gradle uses the correct JVM inside the validation
+    # subprocess — same fix as execution_runner.py.
+    env_extra: dict[str, str] = {"JAVA_HOME": env.java_home} if env.java_home else {}
     log.info(
         "Case %s: runnable=%s unavailable=%s",
         case_id[:8], effective_targets, list(env.unavailable_targets.keys()),
@@ -156,6 +161,7 @@ def validate(
             task_repo=task_repo,
             error_repo=error_repo,
             timeout_s=timeout_s,
+            env_extra=env_extra,
         )
 
         target_status = _aggregate_status(task_outcomes)
@@ -228,6 +234,12 @@ def validate(
         case_id[:8], patch_status, overall,
     )
 
+    # Always reset the after-clone workspace back to HEAD after validation.
+    # The patch stays persisted in DB + artifact store, so the workspace copy
+    # is disposable. Without this reset the next baseline_runner mode starts
+    # from a dirty (patched) workspace.
+    _reset_workspace_path(repo_path)
+
     return ValidationResult(
         case_id=case_id,
         patch_attempt_id=attempt_row.id,
@@ -255,6 +267,7 @@ def _run_target(
     task_repo: TaskResultRepo,
     error_repo: ErrorObservationRepo,
     timeout_s: int,
+    env_extra: Optional[dict[str, str]] = None,
 ) -> tuple[list[TaskOutcome], list[EvidenceError], str]:
     """Run all Gradle tasks for one target; return (task_outcomes, errors, exec_run_id)."""
     revision_label = f"validation_{attempt_number:03d}_{repair_mode}"
@@ -271,6 +284,7 @@ def _run_target(
         repo_path=repo_path,
         tasks=gradle_tasks,
         timeout_s=timeout_s,
+        env_extra=env_extra,
     )
 
     task_outcomes: list[TaskOutcome] = []

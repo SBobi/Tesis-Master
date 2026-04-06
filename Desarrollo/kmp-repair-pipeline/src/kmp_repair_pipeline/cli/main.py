@@ -586,11 +586,14 @@ def build_case_cmd(
               help="KMP targets to run (shared/android/ios). Repeatable. Default: auto-detect.")
 @click.option("--timeout", default=600, show_default=True,
               help="Per-task timeout in seconds.")
+@click.option("--fresh", is_flag=True, default=False,
+              help="Delete existing execution_runs for this case before re-running (soft reset).")
 def run_before_after_cmd(
     case_id: str,
     artifact_base: str,
     targets: tuple[str, ...],
     timeout: int,
+    fresh: bool,
 ) -> None:
     """[Phase 6] Execute before/after Gradle builds and capture execution evidence.
 
@@ -611,6 +614,7 @@ def run_before_after_cmd(
             artifact_base=Path(artifact_base),
             targets=list(targets) if targets else None,
             timeout_s=timeout,
+            fresh=fresh,
         )
 
     click.echo(f"Case {case_id[:8]} execution complete:")
@@ -755,6 +759,20 @@ def repair_cmd(
     """
     from pathlib import Path
     from ..utils.llm_provider import get_default_provider
+    from ..storage.db import get_session
+    from ..storage.repositories import RepairCaseRepo
+
+    # Guard: skip repair entirely when the after-state has no errors.
+    with get_session() as session:
+        _case_row = RepairCaseRepo(session).get_by_id(case_id)
+        if _case_row is None:
+            raise click.ClickException(f"Case {case_id} not found in DB")
+        if _case_row.status == "NO_ERRORS_TO_FIX":
+            click.echo(
+                f"Case {case_id[:8]}: status=NO_ERRORS_TO_FIX — the after-state built "
+                "with 0 errors. Nothing to repair. Run `kmp-repair metrics` directly."
+            )
+            return
 
     provider_impl = get_default_provider(model_id=model, provider_name=provider) if (model or provider) else None
 

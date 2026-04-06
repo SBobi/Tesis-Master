@@ -238,6 +238,32 @@ class ExecutionRunRepo:
         ).order_by(ExecutionRun.created_at)
         return list(self._s.scalars(stmt).all())
 
+    def delete_for_case(self, repair_case_id: str) -> int:
+        """Delete all execution_runs (and cascading task_results + error_observations)
+        for a case.  Used by ``--fresh`` to reset execution evidence before a re-run.
+
+        Returns the number of execution_run rows deleted.
+        """
+        from ..storage.models import ErrorObservation as EOModel, TaskResult as TRModel
+        runs = self.list_for_case(repair_case_id)
+        deleted = 0
+        for run in runs:
+            # Delete error_observations linked via task_results
+            task_stmt = select(TRModel).where(TRModel.execution_run_id == run.id)
+            task_rows = list(self._s.scalars(task_stmt).all())
+            for tr in task_rows:
+                self._s.execute(
+                    EOModel.__table__.delete().where(
+                        EOModel.task_result_id == tr.id
+                    )
+                )
+            for tr in task_rows:
+                self._s.delete(tr)
+            self._s.delete(run)
+            deleted += 1
+        self._s.flush()
+        return deleted
+
 
 # ---------------------------------------------------------------------------
 # TaskResultRepo

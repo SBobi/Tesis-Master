@@ -14,6 +14,7 @@ it is intentional and safe.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -99,6 +100,9 @@ def run_baseline(
 
     result = BaselineRunResult(case_id=case_id, mode=mode)
 
+    # Snapshot original errors so we can detect progress across validate cycles.
+    original_error_keys = _collect_original_error_keys(case_id, session)
+
     for attempt_idx in range(budget):
         run = repair(
             case_id=case_id,
@@ -113,25 +117,49 @@ def run_baseline(
         )
         result.results.append(run)
 
-        if run.patch_status == "APPLIED":
+        if run.patch_status != "APPLIED":
+            if attempt_idx + 1 < budget:
+                log.info(
+                    "Baseline %s: attempt %d/%d status=%s — retrying",
+                    mode, attempt_idx + 1, budget, run.patch_status,
+                )
+                _reset_workspace(case_id, session)
+            else:
+                log.info(
+                    "Baseline %s: budget exhausted after %d attempt(s), final=%s",
+                    mode, budget, run.patch_status,
+                )
+            continue
+
+        # ── Patch applied — validate in-loop ────────────────────────────
+        log.info(
+            "Baseline %s: patch APPLIED on attempt %d/%d — running in-loop validation",
+            mode, attempt_idx + 1, budget,
+        )
+        val_result = _validate_in_loop(case_id, session, artifact_base, mode)
+
+        if val_result.patch_status == "VALIDATED":
+            log.info("Baseline %s: VALIDATED — done", mode)
+            break
+
+        # REJECTED: check if the patch made progress (remaining ≠ original)
+        remaining_keys = _extract_remaining_error_keys(val_result)
+        if remaining_keys == original_error_keys:
             log.info(
-                "Baseline %s: patch APPLIED on attempt %d/%d",
-                mode, attempt_idx + 1, budget,
+                "Baseline %s: REJECTED with no progress (remaining == original) — stopping",
+                mode,
             )
             break
 
+        # Progress detected — store remaining errors in retry_reason and loop
+        _store_remaining_in_retry_reason(val_result, session)
+        log.info(
+            "Baseline %s: REJECTED but %d/%d errors remain (progress) — retrying",
+            mode, len(remaining_keys), len(original_error_keys),
+        )
         if attempt_idx + 1 < budget:
-            log.info(
-                "Baseline %s: attempt %d/%d status=%s — retrying",
-                mode, attempt_idx + 1, budget, run.patch_status,
-            )
-            # Reset between retry attempts so each attempt sees a clean workspace
             _reset_workspace(case_id, session)
-        else:
-            log.info(
-                "Baseline %s: budget exhausted after %d attempt(s), final=%s",
-                mode, budget, run.patch_status,
-            )
+        # If budget exhausted, the loop naturally exits
 
     log.info(
         "Baseline %s for case %s: %d attempt(s), final=%s",
@@ -173,12 +201,83 @@ def run_all_baselines(
             force_patch_attempt=force_patch_attempt,
             max_attempts=max_attempts,
         )
+    # Leave the workspace clean after all modes finish — the patch is persisted
+    # in the DB and artifact store; there is no need to keep it applied in the
+    # filesystem clone.
+    _reset_workspace(case_id, session)
     return results
 
 
 # ---------------------------------------------------------------------------
 # Workspace helpers
 # ---------------------------------------------------------------------------
+
+
+def _validate_in_loop(
+    case_id: str,
+    session: Session,
+    artifact_base: Path | str,
+    mode: str,
+) -> "ValidationResult":  # noqa: F821 — avoid circular import at module level
+    """Run validator for the most recent APPLIED patch; return ValidationResult."""
+    from ..validation.validator import validate, ValidationResult  # noqa: F401
+    return validate(
+        case_id=case_id,
+        session=session,
+        artifact_base=artifact_base,
+    )
+
+
+def _collect_original_error_keys(case_id: str, session: Session) -> frozenset[tuple]:
+    """Return a frozenset of (error_type, file_path, message) from the after execution run."""
+    from ..case_bundle.serialization import from_db_case
+    bundle = from_db_case(case_id, session)
+    if bundle is None or bundle.execution is None or bundle.execution.after is None:
+        return frozenset()
+    return frozenset(
+        (e.error_type, e.file_path or "", e.message or "")
+        for e in bundle.execution.after.error_observations
+    )
+
+
+def _extract_remaining_error_keys(val_result) -> frozenset[tuple]:
+    """Extract (error_type, file_path, message) keys from a ValidationResult."""
+    keys = set()
+    for tv in val_result.target_results:
+        for e in tv.error_observations:
+            keys.add((e.error_type, e.file_path or "", e.message or ""))
+    return frozenset(keys)
+
+
+def _store_remaining_in_retry_reason(val_result, session: Session) -> None:
+    """Persist remaining validation errors into the patch attempt's retry_reason.
+
+    This lets repair_context() surface them in subsequent attempt prompts so
+    the RepairAgent knows which errors survive after the patch was applied.
+    """
+    from ..storage.repositories import PatchAttemptRepo
+    import datetime, json as _json
+
+    attempt_repo = PatchAttemptRepo(session)
+    attempt_row = attempt_repo.get_by_id(val_result.patch_attempt_id)
+    if attempt_row is None:
+        return
+
+    remaining = []
+    for tv in val_result.target_results:
+        for e in tv.error_observations:
+            remaining.append({
+                "error_type": e.error_type,
+                "file_path": e.file_path,
+                "line": e.line,
+                "message": e.message,
+            })
+
+    attempt_row.retry_reason = _json.dumps({
+        "validation_status": val_result.patch_status,
+        "remaining_errors": remaining,
+    })
+    session.flush()
 
 
 def _reset_workspace(case_id: str, session: Session) -> None:

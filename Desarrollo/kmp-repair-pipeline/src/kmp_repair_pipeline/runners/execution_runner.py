@@ -43,7 +43,7 @@ from ..storage.repositories import (
     TaskResultRepo,
 )
 from ..utils.log import get_logger
-from .env_detector import EnvProfile, detect
+from .env_detector import EnvProfile, _write_local_properties, detect
 from .gradle_runner import GradleRunResult, run_tasks, tasks_for_target
 
 log = get_logger(__name__)
@@ -70,6 +70,7 @@ def run_before_after(
     artifact_base: Path | str = Path("data/artifacts"),
     targets: Optional[list[str]] = None,
     timeout_s: int = 600,
+    fresh: bool = False,
 ) -> ExecutionResult:
     """Execute before and after revisions for `case_id`.
 
@@ -85,10 +86,25 @@ def run_before_after(
         Which KMP targets to run. ``None`` means auto-detect from EnvProfile.
     timeout_s:
         Per-task timeout in seconds.
+    fresh:
+        When True, delete existing execution_runs (and child rows) for this case
+        before re-running and reset the case status to SHADOW_BUILT.  Safe to use
+        for repeated test runs; dangerous if downstream phases depend on the rows.
     """
     bundle = from_db_case(case_id, session)
     if bundle is None:
         raise ValueError(f"Case {case_id} not found in DB")
+
+    if fresh:
+        deleted = ExecutionRunRepo(session).delete_for_case(case_id)
+        if deleted:
+            log.info("Case %s: --fresh deleted %d execution_run(s)", case_id[:8], deleted)
+        # Reset status so the case behaves as if execution never happened
+        RepairCaseRepo(session).set_status(
+            RepairCaseRepo(session).get_by_id(case_id),
+            "SHADOW_BUILT",
+        )
+        bundle.meta.status = "SHADOW_BUILT"
 
     if bundle.meta.status not in ("SHADOW_BUILT", "INGESTED", "CREATED", "EXECUTED"):
         log.warning(
@@ -106,8 +122,32 @@ def run_before_after(
         )
 
     after_path = Path(after_rev.local_path)
-    env = detect(after_path)
+
+    # Reset both workspaces to HEAD before running — ensures idempotent re-runs
+    # and that neither workspace carries stale patches from a previous invocation.
+    before_rev_pre = rev_repo.get(case_id, "before")
+    before_path_pre = (
+        Path(before_rev_pre.local_path)
+        if (before_rev_pre and before_rev_pre.local_path)
+        else None
+    )
+    if before_path_pre:
+        _reset_workspace_path(before_path_pre)
+    _reset_workspace_path(after_path)
+
+    env = detect(after_path)  # also writes local.properties to after_path
+
+    # Mirror local.properties (sdk.dir) to the before workspace so Android
+    # builds there use the same SDK — fixes the "pre-existing" Android failure
+    # that was caused by the before workspace never receiving local.properties.
+    if before_path_pre and env.android_sdk_available and env.android_sdk_root:
+        _write_local_properties(before_path_pre, env.android_sdk_root)
+        log.info("Case %s: wrote local.properties to before workspace", case_id[:8])
     profile_name = _PROFILE_MACOS if env.is_macos else _PROFILE_LINUX
+    # Forward JAVA_HOME so Gradle always uses the correct JVM, regardless of
+    # whether the caller's shell has JAVA_HOME set.  Java 25 crashes the Kotlin
+    # 2.x compiler, so we must pin to Temurin 21 via env_extra.
+    env_extra: dict[str, str] = {"JAVA_HOME": env.java_home} if env.java_home else {}
 
     # Determine which targets to run
     effective_targets = targets or env.runnable_targets
@@ -142,6 +182,7 @@ def run_before_after(
             artifact_store=artifact_store,
             session=session,
             timeout_s=timeout_s,
+            env_extra=env_extra,
         )
         all_task_outcomes[revision_type] = task_outcomes
         all_errors[revision_type] = errors
@@ -187,13 +228,25 @@ def run_before_after(
     bundle.set_execution_evidence(exec_evidence)
     to_db(bundle, session)
 
-    # Update repair_case status
+    total_errors = len(all_errors.get("after", []))
+
+    # No-op detection: if the after-state compiled with 0 errors the update is
+    # non-breaking — there is nothing for the repair agent to fix.
+    # We set a special status so downstream phases can short-circuit cleanly.
+    if total_errors == 0 and "after" in ran_revisions:
+        new_status = "NO_ERRORS_TO_FIX"
+        log.info(
+            "Case %s: after-state has 0 errors — marking NO_ERRORS_TO_FIX (non-breaking update)",
+            case_id[:8],
+        )
+    else:
+        new_status = "EXECUTED"
+
     RepairCaseRepo(session).set_status(
         RepairCaseRepo(session).get_by_id(case_id),
-        "EXECUTED",
+        new_status,
     )
 
-    total_errors = len(all_errors.get("after", []))
     log.info(
         "Case %s execution complete: status=%s errors=%d",
         case_id[:8], overall_after, total_errors,
@@ -223,6 +276,7 @@ def _run_revision(
     artifact_store: ArtifactStore,
     session: Session,
     timeout_s: int,
+    env_extra: Optional[dict[str, str]] = None,
 ) -> tuple[list[TaskOutcome], list[EvidenceError]]:
     """Run all target tasks for one revision; persist to DB. Returns (task_outcomes, errors)."""
     run_repo = ExecutionRunRepo(session)
@@ -247,6 +301,7 @@ def _run_revision(
             repo_path=repo_path,
             tasks=gradle_tasks,
             timeout_s=timeout_s,
+            env_extra=env_extra,
         )
 
         for gr in results:
@@ -329,6 +384,34 @@ def _aggregate_status(task_outcomes: list[TaskOutcome]) -> str:
     if any(s == ValidationStatus.FAILED_TESTS for s in statuses):
         return ValidationStatus.FAILED_TESTS.value
     return ValidationStatus.INCONCLUSIVE.value
+
+
+def _reset_workspace_path(workspace: Path) -> None:
+    """Reset a git workspace to HEAD (discard any uncommitted changes).
+
+    Safe to call on a workspace that is already clean — git is a no-op then.
+    Used to guarantee idempotent re-runs of run_before_after.
+    """
+    import subprocess as _sp
+
+    if not (workspace / ".git").exists():
+        log.debug("_reset_workspace_path: %s is not a git repo — skipping", workspace)
+        return
+    try:
+        _sp.run(
+            ["git", "checkout", "--", "."],
+            cwd=workspace, check=True, capture_output=True,
+        )
+        _sp.run(
+            ["git", "clean", "-fd"],
+            cwd=workspace, check=True, capture_output=True,
+        )
+        log.info("reset workspace to HEAD: %s", workspace)
+    except _sp.CalledProcessError as exc:
+        log.warning(
+            "workspace reset failed for %s: %s",
+            workspace, exc.stderr.decode(errors="replace").strip(),
+        )
 
 
 def _unavailable_task_outcomes(env: EnvProfile) -> list[TaskOutcome]:

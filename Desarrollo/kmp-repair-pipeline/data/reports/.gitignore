@@ -1,0 +1,4 @@
+# All generated reports are gitignored. Only .gitkeep is tracked.
+*
+!.gitignore
+!.gitkeep

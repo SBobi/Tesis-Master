@@ -1,0 +1,4 @@
+# All artifact content is gitignored. Only .gitkeep is tracked.
+*
+!.gitignore
+!.gitkeep

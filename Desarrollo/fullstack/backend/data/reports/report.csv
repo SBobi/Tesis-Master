@@ -1,2 +1,0 @@
-case_id,repair_mode,case_status,repo_url,pr_ref,update_class,bsr,ctsr,ffsr,efr,hit_at_1,hit_at_3,hit_at_5,source_set_accuracy
-3407b237-981f-40da-9623-4c4ac3c2087b,iterative_agentic,EVALUATED,https://github.com/estebancastelblanco/kmp-production-sample-impact-demo,pull/1,direct_library,1.0,1.0,1.0,1.0,,,,

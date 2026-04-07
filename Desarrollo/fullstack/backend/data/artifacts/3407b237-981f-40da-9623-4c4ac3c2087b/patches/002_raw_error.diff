@@ -1,9 +1,0 @@
---- a/gradle/libs.versions.toml
-+++ b/gradle/libs.versions.toml
-@@ -1,5 +1,5 @@
- [versions]
--kotlin = "?"
-+kotlin = "2.3.0"
- 
- [libraries]
- # Ktor

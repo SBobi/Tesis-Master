@@ -1,5 +1,20 @@
-node_modules
-.next
-coverage
-playwright-report
-test-results
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Next.js build output ──────────────────────────────────────────────────────
+.next/
+out/
+
+# ── Test output ───────────────────────────────────────────────────────────────
+coverage/
+playwright-report/
+test-results/
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env.local
+.env.*.local
+# .env.local is kept by convention (NEXT_PUBLIC_ vars are not secret)
+# but should not contain API keys or tokens.
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store

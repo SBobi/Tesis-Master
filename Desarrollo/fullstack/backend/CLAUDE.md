@@ -49,7 +49,7 @@ Never use relative imports to reach pipeline code.
 
 Only the web/orchestration layer:
 ```
-app.py          -- FastAPI routes (14 endpoints)
+app.py          -- FastAPI routes (15 endpoints: 13 REST + 2 SSE)
 worker.py       -- RQ worker entrypoint (macOS bootstrap + Java 21 detection)
 job_runner.py   -- job enqueueing + RQ execution loop
 orchestrator.py -- dispatches stages to pipeline functions
@@ -205,6 +205,19 @@ pytest tests/ -v
 # Run full e2e (requires Docker + .env)
 ./scripts/run_e2e.sh
 ```
+
+---
+
+## `/api/environment` endpoint
+
+Returns a runtime snapshot consumed by the frontend's Environment page.  Contains:
+- `checks`: DB connectivity, Python version, Git, Java, Android SDK, LLM provider
+- `paths`: JAVA_HOME, ANDROID_HOME/ANDROID_SDK_ROOT, KMP_DATABASE_URL, artifact/report dirs, GCP credentials
+- `llm`: provider, model, fake flag, vertex project/location
+- `defaults`: default stage timeouts and top-k values (loaded from `sanitize_stage_params`)
+
+The frontend reads this endpoint on mount and renders it as a read-only dashboard.
+Do not make this endpoint writable — configuration is set via `.env`, not this API.
 
 ---
 

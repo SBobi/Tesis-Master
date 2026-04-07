@@ -1,0 +1,66 @@
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.pytest_cache/
+.venv/
+venv/
+env/
+.python-version
+
+# ── Node / Next.js ────────────────────────────────────────────────────────────
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+.turbo/
+
+# ── Environment / secrets (never commit these) ────────────────────────────────
+.env
+.env.local
+.env.*.local
+.secrets/
+service-account.json
+service-account-*.json
+*service-account*.json
+*.credentials.json
+*.p12
+*.pem
+
+# ── Data directories (runtime artifacts — always regenerated) ─────────────────
+# Each component's data/ is gitignored at that level.
+# This root rule is a safety net.
+fullstack/backend/data/
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# ── Gradle / Android (shadow workspace repos) ─────────────────────────────────
+# Workspace clones live in data/artifacts/<case_id>/workspace/
+# They contain embedded .git repos — exclude all Gradle build outputs
+# if any workspace path leaks outside the data/ boundary.
+.gradle/
+*/build/
+local.properties
+xcuserdata/
+Pods/
+*.jks
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak

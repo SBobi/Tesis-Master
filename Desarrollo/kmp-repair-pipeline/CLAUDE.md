@@ -247,6 +247,18 @@ If none are found, Android targets are recorded as `NOT_RUN_ENVIRONMENT_UNAVAILA
 
 ---
 
+## Web adapter integration
+
+This pipeline is also exposed via a FastAPI + RQ web adapter at `fullstack/backend/`.
+
+Rules when working at the pipeline layer:
+- Pipeline modules are imported by the adapter as an editable dependency (`pip install -e .`).  Keep the public API stable: do not rename, remove, or change signatures of functions called from `orchestrator.py`.
+- The adapter's `orchestrator.py` dispatches to: `ingest_pr_url`, `build_case`, `run_before_after`, `analyze_case`, `localize`, `run_baseline` / `repair`, `validate`, `explain`, `compute_metrics`, `generate_report`.  If you rename any of these, update `orchestrator.py` in the adapter.
+- Schema changes must go through Alembic in this directory.  The adapter's docker-compose shares the same PostgreSQL instance.
+- The web API exposes a `GET /api/environment` endpoint that calls `sanitize_stage_params()` to fetch defaults.  If you change default parameter values in `stages.py` (pipeline side), the endpoint will reflect those changes automatically.
+
+---
+
 ## Build and development commands
 
 ```bash
@@ -308,7 +320,7 @@ src/kmp_repair_pipeline/
 migrations/        — Alembic migration files
 scripts/           — bootstrap_env.sh (env auto-detection), run_e2e.sh (full e2e pipeline runner)
 tests/
-  unit/            — 310 passing tests (no network, no Docker)
+  unit/            — unit tests (no network, no Docker)
   integration/     — DB schema + bundle rehydration (requires Docker)
 data/
   artifacts/       — local artifact store (gitignored except .gitkeep)
@@ -422,7 +434,7 @@ These are documented limitations. Do NOT silently work around them — document 
   - Dependency artifact rename (e.g. `ktor-xml` → `ktor-client-content-negotiation-xmlutil`): detected as COMPILE_ERROR, but agent must infer the mapping from the error message. No structured artifact-rename signal exists.
   - API removal / method rename: classified as COMPILE_ERROR (Unresolved reference). Agent can repair if file content is in context.
   - Gradle plugin API change: may appear as GRADLE_INIT_ERROR. Build scripts are not in repair context by default.
-  - Version catalog alias rename: no diff between before/after catalog is computed. The alias rename is invisible to the agent.
+  - Version catalog alias rename: `catalog_diff.py` computes alias and artifact renames and surfaces them in `repair_context["catalog_alias_diff"]` and `repair_context["artifact_renames"]`.  The RepairAgent can reason about these renames.  However, compile-level errors from alias renames still appear as generic COMPILE_ERROR / API_BREAK_ERROR; the structured diff is supplementary context, not primary evidence.
   - Transitive dependency conflict (diamond): DEPENDENCY_RESOLUTION_ERROR is classified but no resolution strategy is in any repair prompt.
 
 ### Patch application

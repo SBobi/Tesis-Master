@@ -1,5 +1,0 @@
-Case 3407b237 execution complete:
-  status         : EXECUTED
-  revisions run  : before, after
-  runnable targets: ['shared', 'android', 'ios']
-  errors (after) : 9

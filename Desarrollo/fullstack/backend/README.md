@@ -100,7 +100,7 @@ fullstack/backend/
 |   |-- run_e2e.sh        end-to-end test script (no mocking)
 |   `-- reset_case.py     reset a case to INGESTED status
 |-- src/kmp_repair_webapi/
-|   |-- app.py            FastAPI routes (14 endpoints)
+|   |-- app.py            FastAPI routes (15 endpoints: 13 REST + 2 SSE)
 |   |-- worker.py         RQ worker entrypoint
 |   |-- job_runner.py     job enqueueing + RQ execution loop
 |   |-- orchestrator.py   stage dispatch -> kmp_repair_pipeline.*
@@ -282,6 +282,7 @@ python scripts/reset_case.py 3407b237-981f-40da-9623-4c4ac3c2087b --dry-run
 Method  Path                                    Description
 ------  --------------------------------------  ---------------------------
 GET     /api/health                             Health check
+GET     /api/environment                        Runtime snapshot (DB, Java, Android, LLM)
 POST    /api/cases                              Create case from PR URL
 GET     /api/cases                              List cases (filterable)
 GET     /api/cases/{case_id}                    Case detail + full evidence

@@ -1,15 +1,35 @@
-data/artifacts/
+# ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
-.env
-.venv/
+*.pyo
 *.egg-info/
 .pytest_cache/
-data/artifacts/*
-!data/artifacts/.gitkeep
+.venv/
+venv/
 
-# Sensitive credentials (GCP / service accounts)
+# ── Environment / secrets ────────────────────────────────────────────────────
+.env
+.secrets/
 service-account.json
 service-account-*.json
 *service-account*.json
-.secrets/
+
+# ── Runtime data (entirely regenerated — do NOT commit) ──────────────────────
+# data/artifacts/ — shadow workspaces: cloned KMP repos with embedded .git dirs,
+#                   execution outputs, LLM prompts/responses, patches, logs.
+#                   These are large (GBs) and reproducible from the pipeline.
+data/artifacts/*
+!data/artifacts/.gitkeep
+
+# data/reports/ — generated CSV/JSON/MD aggregated reports.
+#                 Re-run `kmp-repair report --format all` to regenerate.
+data/reports/*
+!data/reports/.gitkeep
+
+# ── Shadow workspace embedded repos (safety net) ─────────────────────────────
+# Workspace clones contain .git dirs which git would treat as submodules.
+# The data/artifacts/* rule above covers these, but this is an explicit guard.
+data/artifacts/*/workspace/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store

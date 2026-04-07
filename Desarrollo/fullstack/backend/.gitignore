@@ -1,0 +1,24 @@
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# ── Environment / secrets ────────────────────────────────────────────────────
+.env
+.secrets/
+service-account.json
+service-account-*.json
+*service-account*.json
+
+# ── Runtime data (entirely regenerated at runtime) ───────────────────────────
+# data/artifacts/ — cloned KMP repositories + execution outputs + patches
+# data/reports/   — generated CSV/JSON/MD reports
+# Logs written by the RQ worker
+data/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store

@@ -1,9 +1,0 @@
-Report: 20 row(s) → data/reports
-  data/reports/report.csv
-  data/reports/report.json
-  data/reports/report.md
-Per-mode averages:
-  [context_rich]  BSR=0.8  CTSR=0.8  FFSR=0.8
-  [full_thesis]  BSR=0.6  CTSR=0.6  FFSR=0.6
-  [iterative_agentic]  BSR=0.8  CTSR=0.8  FFSR=0.8
-  [raw_error]  BSR=N/A  CTSR=N/A  FFSR=N/A

@@ -91,7 +91,8 @@ export default function CasesPage() {
       const ordered = [...data].sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at));
       setItems(ordered);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load cases");
+      void err;
+      setError("No data available.");
     } finally {
       setLoading(false);
     }
@@ -101,7 +102,7 @@ export default function CasesPage() {
     loadCases();
   }, [preset]);
 
-  const empty = !loading && items.length === 0;
+  const empty = !loading && !error && items.length === 0;
 
   return (
     <div className="page-shell py-16">
@@ -146,7 +147,7 @@ export default function CasesPage() {
 
       <section className="space-y-1">
         {loading ? <p className="text-sm text-[var(--muted)]">Loading cases...</p> : null}
-        {error ? <p className="text-sm text-[var(--bad)]">{error}</p> : null}
+        {error ? <p className="text-sm text-[var(--muted)]">{error}</p> : null}
         {empty ? <p className="text-sm text-[var(--muted)]">No cases match current filters.</p> : null}
 
         {items.map((item) => {

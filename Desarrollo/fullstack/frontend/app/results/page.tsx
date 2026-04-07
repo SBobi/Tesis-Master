@@ -207,7 +207,8 @@ export default function ResultsPage() {
       .catch((err) => {
         if (mounted) {
           setRows([]);
-          setError(err instanceof Error ? err.message : "Could not load reports");
+          void err;
+          setError("No data available.");
         }
       })
       .finally(() => {
@@ -421,7 +422,7 @@ export default function ResultsPage() {
         </div>
 
         {loading ? <p className="text-sm text-[var(--muted)]">Loading aggregated report rows...</p> : null}
-        {error ? <p className="text-sm text-[var(--bad)]">{error}</p> : null}
+        {error ? <p className="text-sm text-[var(--muted)]">{error}</p> : null}
 
         {!loading && !error ? (
           <div className="space-y-1">
@@ -499,7 +500,7 @@ export default function ResultsPage() {
               })
             ) : (
               <p className="rounded border border-[var(--line-quiet)] bg-white px-4 py-3 text-sm text-[var(--muted)]">
-                No rows available for selected modes.
+                No data available for selected modes.
               </p>
             )}
           </div>

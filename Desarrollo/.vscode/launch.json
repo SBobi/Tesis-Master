@@ -1,0 +1,33 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend E2E (Ktor default)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "${workspaceFolder}/fullstack/backend/scripts/run_e2e.sh",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PATH": "/opt/homebrew/opt/python@3.12/bin:/opt/homebrew/bin:${env:PATH}"
+      }
+    },
+    {
+      "name": "Backend E2E (custom case)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "${workspaceFolder}/fullstack/backend/scripts/run_e2e.sh ${input:caseId}",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PATH": "/opt/homebrew/opt/python@3.12/bin:/opt/homebrew/bin:${env:PATH}"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "caseId",
+      "type": "promptString",
+      "description": "Case UUID to run",
+      "default": "3407b237-981f-40da-9623-4c4ac3c2087b"
+    }
+  ]
+}

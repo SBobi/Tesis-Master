@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from .models import (
     AgentLog,
+    CaseStatusTransition,
     DependencyDiff,
     DependencyEvent,
     ErrorObservation,
@@ -28,6 +29,7 @@ from .models import (
     Explanation,
     LocalizationCandidate,
     PatchAttempt,
+    PipelineJob,
     RepairCase,
     Repository,
     Revision,
@@ -687,4 +689,113 @@ class EvaluationMetricRepo:
         )
         if repair_modes:
             stmt = stmt.where(EvaluationMetric.repair_mode.in_(repair_modes))
+        return list(self._s.scalars(stmt).all())
+
+
+# ---------------------------------------------------------------------------
+# PipelineJobRepo  (web orchestration — added for fullstack integration)
+# ---------------------------------------------------------------------------
+
+
+class PipelineJobRepo:
+    def __init__(self, session: Session) -> None:
+        self._s = session
+
+    def create(
+        self,
+        repair_case_id: str,
+        job_type: str,
+        stage: str | None = None,
+        start_from_stage: str | None = None,
+        requested_by: str | None = None,
+        command_preview: str | None = None,
+        params: dict | None = None,
+        effective_params: dict | None = None,
+        log_path: str | None = None,
+        parent_job_id: str | None = None,
+    ) -> PipelineJob:
+        row = PipelineJob(
+            repair_case_id=repair_case_id,
+            job_type=job_type,
+            stage=stage,
+            start_from_stage=start_from_stage,
+            requested_by=requested_by,
+            command_preview=command_preview,
+            params=params,
+            effective_params=effective_params,
+            log_path=log_path,
+            parent_job_id=parent_job_id,
+        )
+        self._s.add(row)
+        self._s.flush()
+        return row
+
+    def get_by_id(self, id: str) -> Optional[PipelineJob]:
+        return self._s.get(PipelineJob, id)
+
+    def list_for_case(self, repair_case_id: str) -> list[PipelineJob]:
+        stmt = (
+            select(PipelineJob)
+            .where(PipelineJob.repair_case_id == repair_case_id)
+            .order_by(PipelineJob.created_at.desc())
+        )
+        return list(self._s.scalars(stmt).all())
+
+    def list_active(self) -> list[PipelineJob]:
+        stmt = (
+            select(PipelineJob)
+            .where(PipelineJob.status.in_(["QUEUED", "RUNNING", "CANCEL_REQUESTED"]))
+            .order_by(PipelineJob.created_at.desc())
+        )
+        return list(self._s.scalars(stmt).all())
+
+
+# ---------------------------------------------------------------------------
+# CaseStatusTransitionRepo  (web orchestration — added for fullstack integration)
+# ---------------------------------------------------------------------------
+
+
+class CaseStatusTransitionRepo:
+    def __init__(self, session: Session) -> None:
+        self._s = session
+
+    def create(
+        self,
+        repair_case_id: str,
+        stage: str | None,
+        from_status: str | None,
+        to_status: str | None,
+        transition_type: str = "STATUS_CHANGE",
+        message: str | None = None,
+        metadata_json: dict | None = None,
+        pipeline_job_id: str | None = None,
+    ) -> CaseStatusTransition:
+        row = CaseStatusTransition(
+            repair_case_id=repair_case_id,
+            stage=stage,
+            from_status=from_status,
+            to_status=to_status,
+            transition_type=transition_type,
+            message=message,
+            metadata_json=metadata_json,
+            pipeline_job_id=pipeline_job_id,
+        )
+        self._s.add(row)
+        self._s.flush()
+        return row
+
+    def list_for_case(self, repair_case_id: str) -> list[CaseStatusTransition]:
+        stmt = (
+            select(CaseStatusTransition)
+            .where(CaseStatusTransition.repair_case_id == repair_case_id)
+            .order_by(CaseStatusTransition.created_at.desc())
+        )
+        return list(self._s.scalars(stmt).all())
+
+    def list_for_job(self, pipeline_job_id: str) -> list[CaseStatusTransition]:
+        stmt = (
+            select(CaseStatusTransition)
+            .where(CaseStatusTransition.pipeline_job_id == pipeline_job_id)
+            .order_by(CaseStatusTransition.created_at)
+        )
         return list(self._s.scalars(stmt).all())

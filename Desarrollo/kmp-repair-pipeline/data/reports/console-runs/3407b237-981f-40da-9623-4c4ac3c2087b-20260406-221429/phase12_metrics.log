@@ -1,0 +1,17 @@
+[04/06/26 22:19:04] INFO     Database engine created: localhost:5432/kmp_repair 
+[04/06/26 22:19:04] INFO     Rehydrated: Case 3407b237 [EXPLAINED]              
+                             kmp-production-sample-impact-demo | io.ktor        
+                             3.1.3→3.4.1                                        
+[04/06/26 22:19:04] INFO     Case 3407b237 mode=raw_error BSR=0.0 CTSR=0.0      
+                             FFSR=0.0 EFR=0.000 Hit@1=N/A                       
+                    INFO     Case 3407b237 mode=context_rich BSR=1.0 CTSR=1.0   
+                             FFSR=1.0 EFR=1.000 Hit@1=N/A                       
+                    INFO     Case 3407b237 mode=iterative_agentic BSR=1.0       
+                             CTSR=1.0 FFSR=1.0 EFR=1.000 Hit@1=N/A              
+                    INFO     Case 3407b237 mode=full_thesis BSR=1.0 CTSR=1.0    
+                             FFSR=1.0 EFR=1.000 Hit@1=N/A                       
+Evaluated 4 repair mode(s) for case 3407b237:
+  [raw_error]  BSR=0.0  CTSR=0.0  FFSR=0.0  EFR=0.000  Hit@1=N/A
+  [context_rich]  BSR=1.0  CTSR=1.0  FFSR=1.0  EFR=1.000  Hit@1=N/A
+  [iterative_agentic]  BSR=1.0  CTSR=1.0  FFSR=1.0  EFR=1.000  Hit@1=N/A
+  [full_thesis]  BSR=1.0  CTSR=1.0  FFSR=1.0  EFR=1.000  Hit@1=N/A

@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: kmp-repair-webapi
+Version: 0.1.0
+Summary: Web API adapter layer for kmp-repair-pipeline (integration only, no core duplication)
+Requires-Python: >=3.11
+Requires-Dist: fastapi>=0.115
+Requires-Dist: uvicorn[standard]>=0.30
+Requires-Dist: redis>=5.0
+Requires-Dist: rq<2.0,>=1.16

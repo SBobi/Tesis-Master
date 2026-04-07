@@ -1,8 +1,0 @@
-{
-  "python.defaultInterpreterPath": "/opt/homebrew/opt/python@3.12/bin/python3.12",
-  "python.terminal.activateEnvironment": false,
-  "terminal.integrated.env.osx": {
-    "JAVA_HOME": "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home",
-    "PATH": "/opt/homebrew/opt/python@3.12/bin:/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home/bin:${env:PATH}"
-  }
-}

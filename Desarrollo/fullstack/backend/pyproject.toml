@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kmp-repair-webapi"
+version = "0.1.0"
+description = "Web API adapter layer for kmp-repair-pipeline (integration only, no core duplication)"
+requires-python = ">=3.11"
+
+dependencies = [
+    # ── Core pipeline (editable reference — no code duplication) ──────────
+    # Install with: pip install -e ../../kmp-repair-pipeline
+    # Provides: kmp_repair_pipeline.*
+    # ─────────────────────────────────────────────────────────────────────
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "redis>=5.0",
+    "rq>=1.16,<2.0",
+]
+
+[project.scripts]
+kmp-repair-api    = "kmp_repair_webapi.app:run"
+kmp-repair-worker = "kmp_repair_webapi.worker:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

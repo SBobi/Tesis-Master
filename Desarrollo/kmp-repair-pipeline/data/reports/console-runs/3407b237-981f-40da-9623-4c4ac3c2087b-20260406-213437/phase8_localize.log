@@ -1,0 +1,18 @@
+[04/06/26 21:36:37] WARNING  Failed to parse agent response (Unterminated string
+                             starting at: line 13 column 20 (char 456)) — using 
+                             deterministic candidates                           
+Case 3407b237 localization complete:
+  status          : LOCALIZED
+  candidates      : 10
+  agent used      : True
+
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/gradle/libs.versions.toml
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/shared/src/commonMain/kotlin/com/github/jetbrains/rssreader/core/HttpClient.kt
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/shared/src/commonMain/kotlin/com/github/jetbrains/rssreader/datasource/network/FeedLoader.kt
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/shared/src/iosMain/kotlin/com/github/jetbrains/rssreader/app/IosReduxUtils.kt
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/shared/src/iosMain/kotlin/com/github/jetbrains/rssreader/KoinHelper.kt
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/composeApp/src/jvmMain/kotlin/com/github/jetbrains/rssreader/Main.kt
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/composeApp/src/androidMain/kotlin/com/github/jetbrains/rssreader/App.kt
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/shared/src/commonMain/kotlin/com/github/jetbrains/rssreader/app/FeedStore.kt
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/composeApp/src/androidMain/kotlin/com/github/jetbrains/rssreader/sync/RefreshWorker.kt
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/composeApp/src/androidMain/kotlin/com/github/jetbrains/rssreader/core/RssReader.kt

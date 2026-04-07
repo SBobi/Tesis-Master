@@ -149,6 +149,8 @@ class RepairCase(Base):
     explanations: Mapped[list[Explanation]] = relationship(back_populates="repair_case")
     agent_logs: Mapped[list[AgentLog]] = relationship(back_populates="repair_case")
     evaluation_metrics: Mapped[list[EvaluationMetric]] = relationship(back_populates="repair_case")
+    pipeline_jobs: Mapped[list[PipelineJob]] = relationship(back_populates="repair_case")
+    status_transitions: Mapped[list[CaseStatusTransition]] = relationship(back_populates="repair_case")
 
 
 # ---------------------------------------------------------------------------
@@ -496,3 +498,67 @@ class EvaluationMetric(Base):
     __table_args__ = (
         UniqueConstraint("repair_case_id", "repair_mode", name="uq_metric_per_case_mode"),
     )
+
+
+# ---------------------------------------------------------------------------
+# pipeline_jobs  (web orchestration — added for fullstack integration)
+# ---------------------------------------------------------------------------
+
+
+class PipelineJob(Base):
+    """Audit/orchestration record for a web-triggered pipeline or stage run."""
+
+    __tablename__ = "pipeline_jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    repair_case_id: Mapped[str] = mapped_column(String(36), ForeignKey("repair_cases.id"), nullable=False)
+    parent_job_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("pipeline_jobs.id"))
+    job_type: Mapped[str] = mapped_column(String(64), nullable=False)  # "RUN_STAGE" | "RUN_PIPELINE"
+    stage: Mapped[str | None] = mapped_column(String(64))
+    start_from_stage: Mapped[str | None] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), default="QUEUED")
+    # QUEUED | RUNNING | SUCCEEDED | FAILED | CANCEL_REQUESTED | CANCELED
+    rq_job_id: Mapped[str | None] = mapped_column(String(64))
+    requested_by: Mapped[str | None] = mapped_column(String(128))
+    command_preview: Mapped[str | None] = mapped_column(Text)
+    params: Mapped[dict | None] = mapped_column(JSONB)
+    effective_params: Mapped[dict | None] = mapped_column(JSONB)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    current_stage: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    result_summary: Mapped[dict | None] = mapped_column(JSONB)
+    log_path: Mapped[str | None] = mapped_column(Text)
+    queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    repair_case: Mapped[RepairCase] = relationship(back_populates="pipeline_jobs")
+    parent_job: Mapped[PipelineJob | None] = relationship(remote_side=[id])
+    transitions: Mapped[list[CaseStatusTransition]] = relationship(back_populates="pipeline_job")
+
+
+# ---------------------------------------------------------------------------
+# case_status_transitions  (web orchestration — added for fullstack integration)
+# ---------------------------------------------------------------------------
+
+
+class CaseStatusTransition(Base):
+    """Immutable record of every case status change triggered by a web job."""
+
+    __tablename__ = "case_status_transitions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    repair_case_id: Mapped[str] = mapped_column(String(36), ForeignKey("repair_cases.id"), nullable=False)
+    pipeline_job_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("pipeline_jobs.id"))
+    stage: Mapped[str | None] = mapped_column(String(64))
+    from_status: Mapped[str | None] = mapped_column(String(64))
+    to_status: Mapped[str | None] = mapped_column(String(64))
+    transition_type: Mapped[str] = mapped_column(String(64), default="STATUS_CHANGE")
+    message: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    repair_case: Mapped[RepairCase] = relationship(back_populates="status_transitions")
+    pipeline_job: Mapped[PipelineJob | None] = relationship(back_populates="transitions")

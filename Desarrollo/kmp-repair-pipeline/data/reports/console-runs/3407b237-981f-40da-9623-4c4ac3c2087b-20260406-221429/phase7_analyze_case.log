@@ -1,0 +1,33 @@
+[04/06/26 22:16:01] INFO     Database engine created: localhost:5432/kmp_repair 
+[04/06/26 22:16:01] INFO     Rehydrated: Case 3407b237 [EXECUTED]               
+                             kmp-production-sample-impact-demo | io.ktor        
+                             3.1.3→3.4.1                                        
+[04/06/26 22:16:01] INFO     Analyzing repo at                                  
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/3407b237-981f-40da-962
+                             3-4c4ac3c2087b/workspace/after                     
+                    INFO     Parsing Kotlin sources...                          
+                    INFO     Parsed 25 Kotlin files                             
+                    INFO     Analysing impact of io.ktor (3.1.3 → 3.4.1)        
+[04/06/26 22:16:01] INFO     Parsing Kotlin files in                            
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/3407b237-981f-40da-962
+                             3-4c4ac3c2087b/workspace/after...                  
+                    INFO     Parsed 25 Kotlin files                             
+[04/06/26 22:16:01] INFO     Symbol table: 54 symbols from 25 files             
+[04/06/26 22:16:01] INFO     Expect/actual pairs: 0                             
+[04/06/26 22:16:01] INFO     Graph: 25 files, 96 edges, 2 seeds                 
+                    INFO     Static analysis complete: 16/25 files impacted (2  
+                             direct, 0 expect/actual pairs)                     
+                    INFO     Case 3407b237: version catalog has 23 entries      
+                             (kotlin=2.2.0)                                     
+[04/06/26 22:16:02] INFO     Case 3407b237 structural analysis complete: 25     
+                             files parsed, 16 impacted, 0 expect/actual pairs   
+Case 3407b237 structural analysis complete:
+  status          : ANALYZED
+  kotlin files    : 25
+  impacted files  : 16
+  direct imports  : 2
+  expect/actual   : 0 pairs
+  build files     : ['build.gradle.kts', 'settings.gradle.kts', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties']
+  [io.ktor] seeds=2 impacted=16

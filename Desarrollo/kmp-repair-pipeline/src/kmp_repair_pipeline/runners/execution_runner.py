@@ -390,6 +390,8 @@ def _reset_workspace_path(workspace: Path) -> None:
     """Reset a git workspace to HEAD (discard any uncommitted changes).
 
     Safe to call on a workspace that is already clean — git is a no-op then.
+    Uses ``git clean -fdx`` so ignored build artifacts (for example
+    ``build/`` and ``.gradle/``) are also removed.
     Used to guarantee idempotent re-runs of run_before_after.
     """
     import subprocess as _sp
@@ -403,7 +405,7 @@ def _reset_workspace_path(workspace: Path) -> None:
             cwd=workspace, check=True, capture_output=True,
         )
         _sp.run(
-            ["git", "clean", "-fd"],
+            ["git", "clean", "-fdx"],
             cwd=workspace, check=True, capture_output=True,
         )
         log.info("reset workspace to HEAD: %s", workspace)

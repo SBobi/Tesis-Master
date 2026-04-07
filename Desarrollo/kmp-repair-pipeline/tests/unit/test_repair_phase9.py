@@ -630,6 +630,25 @@ class TestRunBaseline:
         # Only one repair call — no-progress REJECTED stops the loop
         assert repair_count == 1
 
+    def test_reset_workspace_uses_clean_fdx(self, tmp_path: Path) -> None:
+        from kmp_repair_pipeline.baselines.baseline_runner import _reset_workspace
+
+        session = MagicMock()
+        after_rev = MagicMock()
+        after_rev.local_path = str(tmp_path)
+        (tmp_path / ".git").mkdir()
+
+        with (
+            patch("kmp_repair_pipeline.baselines.baseline_runner.RevisionRepo") as MockRev,
+            patch("kmp_repair_pipeline.baselines.baseline_runner.subprocess.run") as mock_run,
+        ):
+            MockRev.return_value.get.return_value = after_rev
+            _reset_workspace("case-1", session)
+
+        assert mock_run.call_count == 2
+        assert mock_run.call_args_list[0].args[0] == ["git", "checkout", "--", "."]
+        assert mock_run.call_args_list[1].args[0] == ["git", "clean", "-fdx"]
+
 
 class TestAntiDowngradeScanner:
     def test_clean_diff_passes(self) -> None:

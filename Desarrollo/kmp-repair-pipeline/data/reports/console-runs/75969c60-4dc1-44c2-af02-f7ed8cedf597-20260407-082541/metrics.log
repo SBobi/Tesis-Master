@@ -1,0 +1,17 @@
+[04/07/26 08:30:16] INFO     Database engine created: localhost:5432/kmp_repair 
+[04/07/26 08:30:16] INFO     Rehydrated: Case 75969c60 [EXPLAINED]              
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+[04/07/26 08:30:16] INFO     Case 75969c60 mode=full_thesis BSR=1.0 CTSR=1.0    
+                             FFSR=1.0 EFR=1.000 Hit@1=N/A                       
+                    INFO     Case 75969c60 mode=raw_error BSR=0.0 CTSR=0.0      
+                             FFSR=0.0 EFR=0.000 Hit@1=N/A                       
+                    INFO     Case 75969c60 mode=context_rich BSR=1.0 CTSR=1.0   
+                             FFSR=1.0 EFR=1.000 Hit@1=N/A                       
+                    INFO     Case 75969c60 mode=iterative_agentic BSR=1.0       
+                             CTSR=1.0 FFSR=1.0 EFR=1.000 Hit@1=N/A              
+Evaluated 4 repair mode(s) for case 75969c60:
+  [full_thesis]  BSR=1.0  CTSR=1.0  FFSR=1.0  EFR=1.000  Hit@1=N/A
+  [raw_error]  BSR=0.0  CTSR=0.0  FFSR=0.0  EFR=0.000  Hit@1=N/A
+  [context_rich]  BSR=1.0  CTSR=1.0  FFSR=1.0  EFR=1.000  Hit@1=N/A
+  [iterative_agentic]  BSR=1.0  CTSR=1.0  FFSR=1.0  EFR=1.000  Hit@1=N/A

@@ -1,0 +1,3 @@
+[console_scripts]
+kmp-repair-api = kmp_repair_webapi.app:run
+kmp-repair-worker = kmp_repair_webapi.worker:run

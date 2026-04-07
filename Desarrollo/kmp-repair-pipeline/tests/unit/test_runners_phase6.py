@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -330,3 +330,36 @@ class TestNoOpDetectionInExecution:
             run_before_after("no-err-case", session)
 
         assert "NO_ERRORS_TO_FIX" in set_status_calls
+
+
+class TestWorkspaceReset:
+    def test_reset_workspace_path_uses_clean_fdx(self, tmp_path: Path) -> None:
+        from kmp_repair_pipeline.runners.execution_runner import _reset_workspace_path
+
+        (tmp_path / ".git").mkdir()
+
+        with patch("subprocess.run") as mock_run:
+            _reset_workspace_path(tmp_path)
+
+        assert mock_run.call_args_list == [
+            call(
+                ["git", "checkout", "--", "."],
+                cwd=tmp_path,
+                check=True,
+                capture_output=True,
+            ),
+            call(
+                ["git", "clean", "-fdx"],
+                cwd=tmp_path,
+                check=True,
+                capture_output=True,
+            ),
+        ]
+
+    def test_reset_workspace_path_skips_non_git_dir(self, tmp_path: Path) -> None:
+        from kmp_repair_pipeline.runners.execution_runner import _reset_workspace_path
+
+        with patch("subprocess.run") as mock_run:
+            _reset_workspace_path(tmp_path)
+
+        mock_run.assert_not_called()

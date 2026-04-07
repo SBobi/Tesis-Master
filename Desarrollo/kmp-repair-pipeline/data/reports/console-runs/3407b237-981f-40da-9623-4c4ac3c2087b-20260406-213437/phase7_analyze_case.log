@@ -1,0 +1,8 @@
+Case 3407b237 structural analysis complete:
+  status          : ANALYZED
+  kotlin files    : 25
+  impacted files  : 16
+  direct imports  : 2
+  expect/actual   : 0 pairs
+  build files     : ['build.gradle.kts', 'settings.gradle.kts', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties']
+  [io.ktor] seeds=2 impacted=16

@@ -7,7 +7,7 @@ Workspace isolation guarantee
 ------------------------------
 Each baseline mode must see the original (unpatched) after-clone workspace so
 that a patch applied by mode N does not corrupt modes N+1..M.  Before every
-mode run, ``_reset_workspace`` performs a ``git checkout -- . && git clean -fd``
+mode run, ``_reset_workspace`` performs a ``git checkout -- . && git clean -fdx``
 on the after-clone.  This is a local operation on a private workspace copy —
 it is intentional and safe.
 """
@@ -307,9 +307,10 @@ def _reset_workspace(case_id: str, session: Session) -> None:
             check=True,
             capture_output=True,
         )
-        # Remove untracked files and directories (reject files, .orig, etc.)
+        # Remove untracked + ignored files and directories (build/, .gradle/,
+        # reject files, .orig, etc.) so each attempt is fully isolated.
         subprocess.run(
-            ["git", "clean", "-fd"],
+            ["git", "clean", "-fdx"],
             cwd=workspace,
             check=True,
             capture_output=True,

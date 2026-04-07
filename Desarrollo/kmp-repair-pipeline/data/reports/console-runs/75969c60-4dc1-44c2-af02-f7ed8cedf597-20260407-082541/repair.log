@@ -1,0 +1,422 @@
+[04/07/26 08:27:26] INFO     Database engine created: localhost:5432/kmp_repair 
+[04/07/26 08:27:28] INFO     Case 75969c60: workspace reset to HEAD             
+                             (/Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-r
+                             epair-pipeline/data/artifacts/75969c60-4dc1-44c2-af
+                             02-f7ed8cedf597/workspace/after)                   
+[04/07/26 08:27:28] INFO     Rehydrated: Case 75969c60 [LOCALIZED]              
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+                    INFO     Rehydrated: Case 75969c60 [LOCALIZED]              
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+[04/07/26 08:27:28] INFO     Calling RepairAgent (model=gemini-2.5-flash        
+                             mode=raw_error attempt=3)                          
+[04/07/26 08:27:32] INFO     RepairAgent call complete: tokens_in=1256          
+                             tokens_out=91 latency=3.23s                        
+[04/07/26 08:27:32] WARNING  Patch left reject files:                           
+                             ['gradle/libs.versions.toml.rej']                  
+[04/07/26 08:27:32] WARNING  Case 75969c60 attempt 3: patch failed to apply     
+                             (strategy=single_diff) —                           
+                    INFO     Case 75969c60 repair done: mode=raw_error          
+                             strategy=single_diff attempt=3 status=FAILED_APPLY 
+[04/07/26 08:27:32] INFO     Baseline raw_error: attempt 1/2 status=FAILED_APPLY
+                             — retrying                                         
+                    INFO     Case 75969c60: workspace reset to HEAD             
+                             (/Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-r
+                             epair-pipeline/data/artifacts/75969c60-4dc1-44c2-af
+                             02-f7ed8cedf597/workspace/after)                   
+[04/07/26 08:27:32] INFO     Rehydrated: Case 75969c60 [PATCH_ATTEMPTED]        
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+                    INFO     Calling RepairAgent (model=gemini-2.5-flash        
+                             mode=raw_error attempt=4)                          
+[04/07/26 08:27:35] INFO     RepairAgent call complete: tokens_in=1256          
+                             tokens_out=91 latency=2.69s                        
+[04/07/26 08:27:35] WARNING  Patch left reject files:                           
+                             ['gradle/libs.versions.toml.rej']                  
+[04/07/26 08:27:35] WARNING  Case 75969c60 attempt 4: patch failed to apply     
+                             (strategy=single_diff) —                           
+                    INFO     Case 75969c60 repair done: mode=raw_error          
+                             strategy=single_diff attempt=4 status=FAILED_APPLY 
+[04/07/26 08:27:35] INFO     Baseline raw_error: budget exhausted after 2       
+                             attempt(s), final=FAILED_APPLY                     
+                    INFO     Baseline raw_error for case 75969c60: 2 attempt(s),
+                             final=FAILED_APPLY                                 
+                    INFO     Case 75969c60: workspace reset to HEAD             
+                             (/Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-r
+                             epair-pipeline/data/artifacts/75969c60-4dc1-44c2-af
+                             02-f7ed8cedf597/workspace/after)                   
+[04/07/26 08:27:35] INFO     Rehydrated: Case 75969c60 [PATCH_ATTEMPTED]        
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+                    INFO     Rehydrated: Case 75969c60 [PATCH_ATTEMPTED]        
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+                    INFO     Calling RepairAgent (model=gemini-2.5-flash        
+                             mode=context_rich attempt=2)                       
+[04/07/26 08:27:38] INFO     RepairAgent call complete: tokens_in=4372          
+                             tokens_out=95 latency=2.84s                        
+[04/07/26 08:27:38] INFO     Case 75969c60 attempt 2: patch applied (1 files,   
+                             strategy=single_diff)                              
+                    INFO     Case 75969c60 repair done: mode=context_rich       
+                             strategy=single_diff attempt=2 status=APPLIED      
+[04/07/26 08:27:38] INFO     Baseline context_rich: patch APPLIED on attempt 1/3
+                             — running in-loop validation                       
+[04/07/26 08:27:38] INFO     Rehydrated: Case 75969c60 [PATCH_ATTEMPTED]        
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+[04/07/26 08:27:38] INFO     Case 75969c60: validating attempt #2               
+                             (mode=context_rich id=28a33a37)                    
+[04/07/26 08:27:38] INFO     Wrote sdk.dir to                                   
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/local.properties    
+                    INFO     EnvProfile: java=openjdk version "21.0.9"          
+                             2025-10-21 LTS gradlew=True android=True xcode=True
+                             targets=['shared', 'android', 'ios']               
+                    INFO     Case 75969c60: runnable=['shared', 'android',      
+                             'ios'] unavailable=[]                              
+[04/07/26 08:27:38] INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue                            
+                             compileCommonMainKotlinMetadata                    
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:27:49] INFO     Task compileCommonMainKotlinMetadata finished:     
+                             exit_code=0 status=SUCCESS_REPOSITORY_LEVEL        
+                             duration=10.3s errors=0                            
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue compileKotlinJvm           
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:27:53] INFO     Task compileKotlinJvm finished: exit_code=0        
+                             status=SUCCESS_REPOSITORY_LEVEL duration=5.0s      
+                             errors=0                                           
+[04/07/26 08:27:54] INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue assembleDebug              
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:28:00] INFO     Task assembleDebug finished: exit_code=0           
+                             status=SUCCESS_REPOSITORY_LEVEL duration=6.7s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue testDebugUnitTest          
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:28:06] INFO     Task testDebugUnitTest finished: exit_code=0       
+                             status=SUCCESS_REPOSITORY_LEVEL duration=5.5s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue compileKotlinIosArm64      
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:28:12] INFO     Task compileKotlinIosArm64 finished: exit_code=0   
+                             status=SUCCESS_REPOSITORY_LEVEL duration=6.2s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue                            
+                             compileKotlinIosSimulatorArm64                     
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:28:18] INFO     Task compileKotlinIosSimulatorArm64 finished:      
+                             exit_code=0 status=SUCCESS_REPOSITORY_LEVEL        
+                             duration=6.3s errors=0                             
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue compileKotlinIosX64        
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:28:25] INFO     Task compileKotlinIosX64 finished: exit_code=0     
+                             status=SUCCESS_REPOSITORY_LEVEL duration=6.4s      
+                             errors=0                                           
+[04/07/26 08:28:25] INFO     Case 75969c60 validation complete:                 
+                             patch_status=VALIDATED                             
+                             overall=SUCCESS_REPOSITORY_LEVEL                   
+[04/07/26 08:28:25] INFO     reset workspace to HEAD:                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after                     
+[04/07/26 08:28:25] INFO     Baseline context_rich: VALIDATED — done            
+                    INFO     Baseline context_rich for case 75969c60: 1         
+                             attempt(s), final=APPLIED                          
+                    INFO     Case 75969c60: workspace reset to HEAD             
+                             (/Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-r
+                             epair-pipeline/data/artifacts/75969c60-4dc1-44c2-af
+                             02-f7ed8cedf597/workspace/after)                   
+[04/07/26 08:28:25] INFO     Rehydrated: Case 75969c60 [VALIDATED]              
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+                    INFO     Rehydrated: Case 75969c60 [VALIDATED]              
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+[04/07/26 08:28:25] INFO     Calling RepairAgent (model=gemini-2.5-flash        
+                             mode=iterative_agentic attempt=2)                  
+[04/07/26 08:28:28] INFO     RepairAgent call complete: tokens_in=4664          
+                             tokens_out=107 latency=3.36s                       
+[04/07/26 08:28:28] INFO     Case 75969c60 attempt 2: patch applied (1 files,   
+                             strategy=single_diff)                              
+                    INFO     Case 75969c60 repair done: mode=iterative_agentic  
+                             strategy=single_diff attempt=2 status=APPLIED      
+[04/07/26 08:28:28] INFO     Baseline iterative_agentic: patch APPLIED on       
+                             attempt 1/4 — running in-loop validation           
+[04/07/26 08:28:28] INFO     Rehydrated: Case 75969c60 [PATCH_ATTEMPTED]        
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+[04/07/26 08:28:28] INFO     Case 75969c60: validating attempt #2               
+                             (mode=iterative_agentic id=aa52d6cc)               
+[04/07/26 08:28:29] INFO     Wrote sdk.dir to                                   
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/local.properties    
+                    INFO     EnvProfile: java=openjdk version "21.0.9"          
+                             2025-10-21 LTS gradlew=True android=True xcode=True
+                             targets=['shared', 'android', 'ios']               
+[04/07/26 08:28:29] INFO     Case 75969c60: runnable=['shared', 'android',      
+                             'ios'] unavailable=[]                              
+[04/07/26 08:28:29] INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue                            
+                             compileCommonMainKotlinMetadata                    
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:28:37] INFO     Task compileCommonMainKotlinMetadata finished:     
+                             exit_code=0 status=SUCCESS_REPOSITORY_LEVEL        
+                             duration=7.9s errors=0                             
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue compileKotlinJvm           
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:28:42] INFO     Task compileKotlinJvm finished: exit_code=0        
+                             status=SUCCESS_REPOSITORY_LEVEL duration=4.9s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue assembleDebug              
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:28:48] INFO     Task assembleDebug finished: exit_code=0           
+                             status=SUCCESS_REPOSITORY_LEVEL duration=6.5s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue testDebugUnitTest          
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:28:54] INFO     Task testDebugUnitTest finished: exit_code=0       
+                             status=SUCCESS_REPOSITORY_LEVEL duration=5.8s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue compileKotlinIosArm64      
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:29:00] INFO     Task compileKotlinIosArm64 finished: exit_code=0   
+                             status=SUCCESS_REPOSITORY_LEVEL duration=6.2s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue                            
+                             compileKotlinIosSimulatorArm64                     
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:29:06] INFO     Task compileKotlinIosSimulatorArm64 finished:      
+                             exit_code=0 status=SUCCESS_REPOSITORY_LEVEL        
+                             duration=6.2s errors=0                             
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue compileKotlinIosX64        
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:29:13] INFO     Task compileKotlinIosX64 finished: exit_code=0     
+                             status=SUCCESS_REPOSITORY_LEVEL duration=6.2s      
+                             errors=0                                           
+[04/07/26 08:29:13] INFO     Case 75969c60 validation complete:                 
+                             patch_status=VALIDATED                             
+                             overall=SUCCESS_REPOSITORY_LEVEL                   
+[04/07/26 08:29:13] INFO     reset workspace to HEAD:                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after                     
+[04/07/26 08:29:13] INFO     Baseline iterative_agentic: VALIDATED — done       
+                    INFO     Baseline iterative_agentic for case 75969c60: 1    
+                             attempt(s), final=APPLIED                          
+                    INFO     Case 75969c60: workspace reset to HEAD             
+                             (/Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-r
+                             epair-pipeline/data/artifacts/75969c60-4dc1-44c2-af
+                             02-f7ed8cedf597/workspace/after)                   
+[04/07/26 08:29:13] INFO     Rehydrated: Case 75969c60 [VALIDATED]              
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+                    INFO     Rehydrated: Case 75969c60 [VALIDATED]              
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+[04/07/26 08:29:13] INFO     Calling RepairAgent (model=gemini-2.5-flash        
+                             mode=full_thesis attempt=4)                        
+[04/07/26 08:29:16] INFO     RepairAgent call complete: tokens_in=4683          
+                             tokens_out=95 latency=2.72s                        
+[04/07/26 08:29:16] INFO     Case 75969c60 attempt 4: patch applied (1 files,   
+                             strategy=single_diff)                              
+                    INFO     Case 75969c60 repair done: mode=full_thesis        
+                             strategy=single_diff attempt=4 status=APPLIED      
+[04/07/26 08:29:16] INFO     Baseline full_thesis: patch APPLIED on attempt 1/5 
+                             — running in-loop validation                       
+[04/07/26 08:29:16] INFO     Rehydrated: Case 75969c60 [PATCH_ATTEMPTED]        
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+[04/07/26 08:29:16] INFO     Case 75969c60: validating attempt #4               
+                             (mode=full_thesis id=05c6c573)                     
+[04/07/26 08:29:16] INFO     Wrote sdk.dir to                                   
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/local.properties    
+                    INFO     EnvProfile: java=openjdk version "21.0.9"          
+                             2025-10-21 LTS gradlew=True android=True xcode=True
+                             targets=['shared', 'android', 'ios']               
+                    INFO     Case 75969c60: runnable=['shared', 'android',      
+                             'ios'] unavailable=[]                              
+[04/07/26 08:29:16] INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue                            
+                             compileCommonMainKotlinMetadata                    
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:29:24] INFO     Task compileCommonMainKotlinMetadata finished:     
+                             exit_code=0 status=SUCCESS_REPOSITORY_LEVEL        
+                             duration=7.9s errors=0                             
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue compileKotlinJvm           
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:29:29] INFO     Task compileKotlinJvm finished: exit_code=0        
+                             status=SUCCESS_REPOSITORY_LEVEL duration=5.0s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue assembleDebug              
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:29:36] INFO     Task assembleDebug finished: exit_code=0           
+                             status=SUCCESS_REPOSITORY_LEVEL duration=6.7s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue testDebugUnitTest          
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:29:42] INFO     Task testDebugUnitTest finished: exit_code=0       
+                             status=SUCCESS_REPOSITORY_LEVEL duration=5.7s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue compileKotlinIosArm64      
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:29:48] INFO     Task compileKotlinIosArm64 finished: exit_code=0   
+                             status=SUCCESS_REPOSITORY_LEVEL duration=6.3s      
+                             errors=0                                           
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue                            
+                             compileKotlinIosSimulatorArm64                     
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:29:54] INFO     Task compileKotlinIosSimulatorArm64 finished:      
+                             exit_code=0 status=SUCCESS_REPOSITORY_LEVEL        
+                             duration=6.2s errors=0                             
+                    INFO     Running:                                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after/gradlew --no-daemon 
+                             --stacktrace --continue compileKotlinIosX64        
+                             (cwd=/Users/sbobi/Desktop/Tesis-Master/Desarrollo/k
+                             mp-repair-pipeline/data/artifacts/75969c60-4dc1-44c
+                             2-af02-f7ed8cedf597/workspace/after)               
+[04/07/26 08:30:00] INFO     Task compileKotlinIosX64 finished: exit_code=0     
+                             status=SUCCESS_REPOSITORY_LEVEL duration=6.2s      
+                             errors=0                                           
+[04/07/26 08:30:00] INFO     Case 75969c60 validation complete:                 
+                             patch_status=VALIDATED                             
+                             overall=SUCCESS_REPOSITORY_LEVEL                   
+[04/07/26 08:30:01] INFO     reset workspace to HEAD:                           
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after                     
+[04/07/26 08:30:01] INFO     Baseline full_thesis: VALIDATED — done             
+                    INFO     Baseline full_thesis for case 75969c60: 1          
+                             attempt(s), final=APPLIED                          
+                    INFO     Case 75969c60: workspace reset to HEAD             
+                             (/Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-r
+                             epair-pipeline/data/artifacts/75969c60-4dc1-44c2-af
+                             02-f7ed8cedf597/workspace/after)                   
+Case 75969c60 — all baselines:
+  raw_error: FAILED_APPLY (2 attempt(s))
+  context_rich: APPLIED (1 attempt(s))
+  iterative_agentic: APPLIED (1 attempt(s))
+  full_thesis: APPLIED (1 attempt(s))

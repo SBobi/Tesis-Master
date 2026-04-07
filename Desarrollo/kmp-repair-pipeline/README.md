@@ -68,7 +68,7 @@ The key insight is that KMP repositories are structurally more demanding than si
 │                    ║   RepairAgent    ║  (unified diff output)      │
 │                    ╚══════════════════╝                             │
 │  Applies: patch --forward -p1  │  git apply (fallback)             │
-│  Workspace reset between modes: git checkout -- . && git clean -fd  │
+│  Workspace reset between modes: git checkout -- . && git clean -fdx │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
                             ▼  PatchAttempt persisted
@@ -306,7 +306,7 @@ Metrics are computed per `(case_id, repair_mode)` and upserted to `evaluation_me
 | `iterative_agentic` | Same as context_rich + previous-attempt feedback | 4 | Retry loop with rejection guidance |
 | `full_thesis` | Full Case Bundle evidence + all previous attempts | 5 | Maximum context; thesis primary baseline |
 
-All modes share the same retry loop with in-loop validation: after each APPLIED patch, `validate()` is called immediately. If VALIDATED, the loop exits. If REJECTED with progress (fewer errors remain), remaining errors are stored in `patch_attempt.retry_reason` and surfaced in the next repair prompt; the loop continues. If REJECTED with no progress, the mode stops. Between modes, the workspace is reset (`git checkout -- . && git clean -fd`). Between retry attempts within a mode, the workspace is also reset.
+All modes share the same retry loop with in-loop validation: after each APPLIED patch, `validate()` is called immediately. If VALIDATED, the loop exits. If REJECTED with progress (fewer errors remain), remaining errors are stored in `patch_attempt.retry_reason` and surfaced in the next repair prompt; the loop continues. If REJECTED with no progress, the mode stops. Between modes, the workspace is reset (`git checkout -- . && git clean -fdx`). Between retry attempts within a mode, the workspace is also reset.
 
 Run all four:
 ```bash
@@ -744,7 +744,7 @@ The pipeline focuses on the Kotlin version / KLIB ABI class of breaking change. 
 - **Auditable** — every agent call logged with prompt, response, token counts, model ID, latency
 - **Reproducible** — same inputs → same outputs; `temperature=0.0` enforced in code; all state persisted to DB before exit
 - **No cloud** — PostgreSQL via Docker Compose, artifacts local under `data/artifacts/`
-- **Workspace isolation** — `git checkout -- . && git clean -fd` before every baseline mode, between retry attempts, and after every validate call; `WorkspaceLock` (fcntl.flock) prevents concurrent access
+- **Workspace isolation** — `git checkout -- . && git clean -fdx` before every baseline mode, between retry attempts, and after every validate call; `WorkspaceLock` (fcntl.flock) prevents concurrent access
 - **Idempotent re-runs** — `run-before-after` resets both before and after workspaces at the start; `--fresh` also deletes existing execution_runs rows (soft reset without re-cloning)
 - **Atomic chain_by_file patching** — on failure, all applied file blocks are reverted before returning; workspace left clean
 - **Patch presence verification** — validation warns (non-blocking) when expected touched files are absent from `git diff`

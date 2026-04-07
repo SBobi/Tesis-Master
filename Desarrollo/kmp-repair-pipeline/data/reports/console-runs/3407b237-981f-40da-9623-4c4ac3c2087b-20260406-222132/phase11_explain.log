@@ -1,0 +1,16 @@
+[04/06/26 22:25:59] INFO     Database engine created: localhost:5432/kmp_repair 
+[04/06/26 22:25:59] INFO     Rehydrated: Case 3407b237 [VALIDATED]              
+                             kmp-production-sample-impact-demo | io.ktor        
+                             3.1.3→3.4.1                                        
+[04/06/26 22:25:59] INFO     Calling ExplanationAgent (model=gemini-2.5-flash)  
+[04/06/26 22:26:07] INFO     ExplanationAgent call complete: tokens_in=2977     
+                             tokens_out=491 latency=7.92s                       
+[04/06/26 22:26:07] INFO     Case 3407b237 explanation complete:                
+                             json=data/artifacts/3407b237-981f-40da-9623-4c4ac3c
+                             2087b/explanations/explanation.json                
+                             md=data/artifacts/3407b237-981f-40da-9623-4c4ac3c20
+                             87b/explanations/explanation.md tokens=2977+491    
+Explanation generated (model=gemini-2.5-flash)
+  JSON    : data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/explanations/explanation.json
+  Markdown: data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/explanations/explanation.md
+  Tokens  : in=2977 out=491

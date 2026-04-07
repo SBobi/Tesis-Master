@@ -223,13 +223,22 @@ function normalizeDiffPath(raw: string): string | null {
 
 function parseDiffChunks(rawDiff: string): DiffChunk[] {
   const lines = rawDiff.split(/\r?\n/);
-  const starts: number[] = [];
+  const gitStarts: number[] = [];
 
   for (let index = 0; index < lines.length; index += 1) {
     if (lines[index].startsWith("diff --git ")) {
-      starts.push(index);
+      gitStarts.push(index);
     }
   }
+
+  const starts = gitStarts.length > 0
+    ? gitStarts
+    : lines
+      .map((line, index) => {
+        const next = lines[index + 1] || "";
+        return line.startsWith("--- ") && next.startsWith("+++ ") ? index : -1;
+      })
+      .filter((index) => index >= 0);
 
   if (starts.length === 0) {
     const rawPathLine = lines.find((line) => line.startsWith("+++ ")) || lines.find((line) => line.startsWith("--- "));
@@ -245,8 +254,20 @@ function parseDiffChunks(rawDiff: string): DiffChunk[] {
     const chunkLines = lines.slice(start, end);
     const headerParts = chunkLines[0].split(" ");
 
-    const oldPath = headerParts[2] ? normalizeDiffPath(headerParts[2]) : null;
-    const newPath = headerParts[3] ? normalizeDiffPath(headerParts[3]) : null;
+    const oldPath = chunkLines[0].startsWith("diff --git ")
+      ? (headerParts[2] ? normalizeDiffPath(headerParts[2]) : null)
+      : (() => {
+        const oldPathLine = chunkLines.find((line) => line.startsWith("--- "));
+        return oldPathLine ? normalizeDiffPath(oldPathLine.slice(4)) : null;
+      })();
+
+    const newPath = chunkLines[0].startsWith("diff --git ")
+      ? (headerParts[3] ? normalizeDiffPath(headerParts[3]) : null)
+      : (() => {
+        const newPathLine = chunkLines.find((line) => line.startsWith("+++ "));
+        return newPathLine ? normalizeDiffPath(newPathLine.slice(4)) : null;
+      })();
+
     const rawPathLine = chunkLines.find((line) => line.startsWith("+++ ")) || chunkLines.find((line) => line.startsWith("--- "));
 
     const filePath = newPath || oldPath || (rawPathLine ? normalizeDiffPath(rawPathLine.slice(4)) : null) || `file-${index + 1}`;
@@ -588,12 +609,21 @@ export default function CaseDetailPage() {
   }, [diffContent]);
 
   const changedFiles = useMemo(() => {
-    if (diffChunks.length > 0) {
-      return diffChunks.map((chunk) => chunk.path);
+    const fromDiff = diffChunks
+      .map((chunk) => chunk.path)
+      .filter((path) => path && path !== "patch.diff");
+    const touchedFiles = selectedAttempt?.touched_files || [];
+
+    const combined = [...fromDiff, ...touchedFiles];
+    if (combined.length > 0) {
+      return [...new Set(combined)];
     }
 
-    const touchedFiles = selectedAttempt?.touched_files || [];
-    return [...new Set(touchedFiles)];
+    if (diffChunks.length > 0) {
+      return [...new Set(diffChunks.map((chunk) => chunk.path))];
+    }
+
+    return [];
   }, [diffChunks, selectedAttempt]);
 
   useEffect(() => {

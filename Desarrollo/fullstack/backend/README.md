@@ -343,11 +343,16 @@ KMP_VERTEX_LOCATION         us-central1                         GCP region
 GOOGLE_APPLICATION_CREDENTIALS  (required for vertex)           Path to service account JSON
 ANTHROPIC_API_KEY           (required for anthropic)            Anthropic API key
 JAVA_HOME                   (auto-detected on macOS)            Path to JDK 21
+ANDROID_HOME                (recommended explicit)              Path to Android SDK
+ANDROID_SDK_ROOT            (recommended explicit)              Alternate Android SDK path
 ```
 
 The worker auto-detects macOS and sets `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES`
 and `JAVA_HOME` via `/usr/libexec/java_home -v 21`.  Override `JAVA_HOME` in
 `.env` if auto-detection fails.
+
+For maintainability, define `ANDROID_HOME` and `ANDROID_SDK_ROOT` explicitly in
+`.env` (same path on macOS) instead of relying on fallback auto-detection.
 
 ---
 

@@ -1,0 +1,42 @@
+[04/07/26 15:13:32] INFO     Database engine created: localhost:5432/kmp_repair 
+[04/07/26 15:13:32] INFO     Rehydrated: Case 75969c60 [EXECUTED]               
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+[04/07/26 15:13:32] INFO     Analyzing repo at                                  
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after                     
+                    INFO     Parsing Kotlin sources...                          
+                    INFO     Parsed 25 Kotlin files                             
+                    INFO     Analysing impact of io.insert-koin (4.1.0 → 4.2.0) 
+[04/07/26 15:13:32] INFO     Parsing Kotlin files in                            
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after...                  
+                    INFO     Parsed 25 Kotlin files                             
+[04/07/26 15:13:32] INFO     Symbol table: 54 symbols from 25 files             
+[04/07/26 15:13:32] INFO     Expect/actual pairs: 0                             
+[04/07/26 15:13:32] INFO     Graph: 25 files, 96 edges, 0 seeds                 
+                    WARNING  No seed files found importing prefix               
+                             'io.insert-koin'. This can happen when the Maven   
+                             group ID ('io.insert-koin') does not match the     
+                             Kotlin import namespace used by the library (e.g.  
+                             'io.insert-koin' ships imports under 'org.koin.*').
+                             Localization will proceed with zero static signal —
+                             consider adding a group-to-namespace mapping for   
+                             this dependency.                                   
+                    WARNING  No files found importing 'io.insert-koin'          
+                    INFO     Static analysis complete: 0/25 files impacted (0   
+                             direct, 0 expect/actual pairs)                     
+                    INFO     Case 75969c60: version catalog has 23 entries      
+                             (kotlin=2.2.0)                                     
+                    INFO     Case 75969c60 structural analysis complete: 25     
+                             files parsed, 0 impacted, 0 expect/actual pairs    
+Case 75969c60 structural analysis complete:
+  status          : ANALYZED
+  kotlin files    : 25
+  impacted files  : 0
+  direct imports  : 0
+  expect/actual   : 0 pairs
+  build files     : ['build.gradle.kts', 'settings.gradle.kts', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties']
+  [io.insert-koin] seeds=0 impacted=0

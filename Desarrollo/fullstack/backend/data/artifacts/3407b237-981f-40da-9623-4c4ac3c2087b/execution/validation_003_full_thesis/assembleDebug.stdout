@@ -1,0 +1,133 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as configuration cache cannot be reused because file 'gradle/libs.versions.toml' has changed.
+Type-safe project accessors is an incubating feature.
+
+> Configure project :composeApp
+w: [33m[1m⚠️ The 'org.jetbrains.kotlin.multiplatform' plugin deprecated compatibility with Android Gradle plugin: 'com.android.application'[0m[0m
+The 'org.jetbrains.kotlin.multiplatform' plugin will not be compatible with 'com.android.application' starting with Android Gradle Plugin 9.0.0.
+
+Please change the structure of the your project and move the usage of 'com.android.application' into a separate subproject. The new subproject should add a dependency on this KMP subproject.
+
+Read more: https://kotl.in/kmp-project-structure-migration
+[32m[1mSolution:[0m[0m
+[32m[3mPlease change the structure of your project and move the usage of 'com.android.application' into a separate subproject.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-new-kmp[0m[36m for more details.[0m
+
+
+> Configure project :shared
+w: [33m[1m⚠️ The 'org.jetbrains.kotlin.multiplatform' plugin deprecated compatibility with Android Gradle plugin: 'com.android.library'[0m[0m
+The 'org.jetbrains.kotlin.multiplatform' plugin will not be compatible with 'com.android.library' starting with Android Gradle Plugin 9.0.0.
+[32m[1mSolution:[0m[0m
+[32m[3mPlease use the 'com.android.kotlin.multiplatform.library' plugin instead of 'com.android.library'.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-new-kmp[0m[36m for more details.[0m
+
+
+> Task :shared:preBuild UP-TO-DATE
+> Task :composeApp:preBuild UP-TO-DATE
+> Task :shared:preDebugBuild UP-TO-DATE
+> Task :composeApp:preDebugBuild UP-TO-DATE
+> Task :shared:debugAssetsCopyForAGP NO-SOURCE
+> Task :composeApp:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :composeApp:copyNonXmlValueResourcesForAndroidMain NO-SOURCE
+> Task :composeApp:convertXmlValueResourcesForAndroidDebug NO-SOURCE
+> Task :composeApp:debugAssetsCopyForAGP NO-SOURCE
+> Task :composeApp:convertXmlValueResourcesForAndroidMain NO-SOURCE
+> Task :composeApp:copyNonXmlValueResourcesForAndroidDebug NO-SOURCE
+> Task :composeApp:prepareComposeResourcesTaskForAndroidMain NO-SOURCE
+> Task :composeApp:prepareComposeResourcesTaskForAndroidDebug NO-SOURCE
+> Task :composeApp:generateResourceAccessorsForAndroidMain NO-SOURCE
+> Task :composeApp:generateResourceAccessorsForAndroidDebug NO-SOURCE
+> Task :composeApp:kmpPartiallyResolvedDependenciesChecker
+> Task :shared:kmpPartiallyResolvedDependenciesChecker
+> Task :composeApp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :composeApp:generateExpectResourceCollectorsForCommonMain UP-TO-DATE
+> Task :composeApp:generateComposeResClass UP-TO-DATE
+> Task :composeApp:convertXmlValueResourcesForCommonMain UP-TO-DATE
+> Task :composeApp:copyNonXmlValueResourcesForCommonMain NO-SOURCE
+> Task :composeApp:prepareComposeResourcesTaskForCommonMain UP-TO-DATE
+> Task :composeApp:generateResourceAccessorsForCommonMain UP-TO-DATE
+> Task :composeApp:createDebugCompatibleScreenManifests
+> Task :composeApp:generateDebugResValues FROM-CACHE
+> Task :shared:generateDebugResValues FROM-CACHE
+> Task :shared:javaPreCompileDebug FROM-CACHE
+> Task :composeApp:javaPreCompileDebug FROM-CACHE
+> Task :composeApp:generateDebugBuildConfig FROM-CACHE
+> Task :shared:processDebugManifest FROM-CACHE
+> Task :composeApp:extractDeepLinksDebug FROM-CACHE
+> Task :composeApp:desugarDebugFileDependencies FROM-CACHE
+> Task :shared:generateDebugResources FROM-CACHE
+> Task :shared:writeDebugAarMetadata
+> Task :shared:prepareLintJarForPublish
+> Task :composeApp:generateDebugResources FROM-CACHE
+> Task :composeApp:copyDebugComposeResourcesToAndroidAssets
+> Task :shared:extractDeepLinksDebug FROM-CACHE
+> Task :composeApp:writeDebugAppMetadata
+> Task :shared:packageDebugResources FROM-CACHE
+> Task :shared:mergeDebugJniLibFolders
+> Task :composeApp:mergeDebugShaders
+> Task :shared:compileDebugLibraryResources FROM-CACHE
+> Task :composeApp:packageDebugResources FROM-CACHE
+> Task :composeApp:validateSigningDebug
+> Task :composeApp:writeDebugSigningConfigVersions
+> Task :composeApp:compileDebugShaders NO-SOURCE
+> Task :composeApp:generateDebugAssets UP-TO-DATE
+> Task :shared:mergeDebugNativeLibs NO-SOURCE
+> Task :shared:extractDeepLinksForAarDebug FROM-CACHE
+> Task :shared:stripDebugDebugSymbols NO-SOURCE
+> Task :composeApp:generateActualResourceCollectorsForAndroidMain
+> Task :shared:prepareDebugArtProfile
+> Task :shared:mergeDebugShaders
+> Task :shared:compileDebugShaders NO-SOURCE
+> Task :shared:generateDebugAssets UP-TO-DATE
+> Task :shared:copyDebugJniLibsProjectAndLocalJars
+> Task :composeApp:mergeDebugJniLibFolders
+> Task :shared:copyDebugJniLibsProjectOnly
+> Task :shared:parseDebugLocalResources FROM-CACHE
+> Task :shared:mergeDebugAssets
+> Task :composeApp:parseDebugLocalResources FROM-CACHE
+> Task :shared:generateDebugRFile FROM-CACHE
+> Task :composeApp:processDebugMainManifest FROM-CACHE
+> Task :composeApp:processDebugManifest FROM-CACHE
+> Task :composeApp:processDebugManifestForPackage FROM-CACHE
+> Task :composeApp:mapDebugSourceSetPaths
+> Task :composeApp:mergeDebugAssets
+> Task :composeApp:mergeDebugNativeLibs
+> Task :composeApp:compressDebugAssets FROM-CACHE
+> Task :composeApp:checkDebugDuplicateClasses
+> Task :composeApp:checkDebugAarMetadata
+
+> Task :composeApp:stripDebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so. Run with --info option to learn more.
+
+> Task :shared:compileDebugKotlinAndroid FROM-CACHE
+> Task :shared:compileDebugJavaWithJavac NO-SOURCE
+> Task :shared:mergeDebugGeneratedProguardFiles
+> Task :shared:mergeDebugConsumerProguardFiles
+> Task :shared:processDebugJavaRes
+> Task :composeApp:mergeDebugResources FROM-CACHE
+> Task :shared:bundleLibCompileToJarDebug
+> Task :shared:bundleLibRuntimeToDirDebug
+> Task :shared:extractDebugAnnotations FROM-CACHE
+> Task :shared:mergeDebugJavaResource
+> Task :shared:syncDebugLibJars FROM-CACHE
+> Task :composeApp:mergeLibDexDebug FROM-CACHE
+> Task :shared:bundleDebugAar
+> Task :shared:assembleDebug
+> Task :composeApp:processDebugResources FROM-CACHE
+> Task :composeApp:compileDebugKotlinAndroid FROM-CACHE
+> Task :composeApp:processDebugJavaRes
+> Task :composeApp:compileDebugJavaWithJavac FROM-CACHE
+> Task :composeApp:dexBuilderDebug FROM-CACHE
+> Task :composeApp:mergeProjectDexDebug FROM-CACHE
+> Task :composeApp:mergeExtDexDebug FROM-CACHE
+> Task :composeApp:mergeDebugJavaResource
+> Task :composeApp:packageDebug
+> Task :composeApp:assembleDebug
+> Task :composeApp:createDebugApkListingFileRedirect
+[Incubating] Problems report is available at: file:///Users/sbobi/Desktop/Tesis-Master/Desarrollo/fullstack/backend/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 6s
+73 actionable tasks: 35 executed, 33 from cache, 5 up-to-date
+Configuration cache entry stored.

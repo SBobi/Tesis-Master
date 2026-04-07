@@ -1,0 +1,36 @@
+[04/07/26 15:13:34] INFO     Database engine created: localhost:5432/kmp_repair 
+[04/07/26 15:13:34] INFO     Rehydrated: Case 75969c60 [ANALYZED]               
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+[04/07/26 15:13:34] INFO     Parsing Kotlin files in                            
+                             /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-re
+                             pair-pipeline/data/artifacts/75969c60-4dc1-44c2-af0
+                             2-f7ed8cedf597/workspace/after...                  
+                    INFO     Parsed 25 Kotlin files                             
+[04/07/26 15:13:34] INFO     Symbol table: 54 symbols from 25 files             
+[04/07/26 15:13:34] INFO     Expect/actual pairs: 0                             
+[04/07/26 15:13:34] INFO     Graph: 25 files, 96 edges, 0 seeds                 
+                    WARNING  No seed files found importing prefix               
+                             'io.insert-koin'. This can happen when the Maven   
+                             group ID ('io.insert-koin') does not match the     
+                             Kotlin import namespace used by the library (e.g.  
+                             'io.insert-koin' ships imports under 'org.koin.*').
+                             Localization will proceed with zero static signal —
+                             consider adding a group-to-namespace mapping for   
+                             this dependency.                                   
+                    WARNING  No files found importing 'io.insert-koin'          
+                    INFO     Static analysis complete: 0/25 files impacted (0   
+                             direct, 0 expect/actual pairs)                     
+[04/07/26 15:13:34] INFO     Scored 0 candidates (top score=0.000)              
+[04/07/26 15:13:34] INFO     Deterministic scoring: 0 candidates                
+[04/07/26 15:13:34] INFO     Calling LocalizationAgent (model=gemini-2.5-flash) 
+[04/07/26 15:13:39] INFO     LocalizationAgent call complete: tokens_in=2397    
+                             tokens_out=284 latency=4.54s                       
+                    INFO     Agent returned 1 candidates                        
+[04/07/26 15:13:39] INFO     Case 75969c60 localized: 1 candidates (agent=True) 
+Case 75969c60 localization complete:
+  status          : LOCALIZED
+  candidates      : 1
+  agent used      : True
+
+  /Users/sbobi/Desktop/Tesis-Master/Desarrollo/kmp-repair-pipeline/data/artifacts/75969c60-4dc1-44c2-af02-f7ed8cedf597/workspace/after/gradle/libs.versions.toml

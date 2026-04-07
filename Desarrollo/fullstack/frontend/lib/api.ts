@@ -1,4 +1,4 @@
-import { CaseDetail, CaseSummary, Job, ReportsComparisonRow } from "@/lib/types";
+import { CaseDetail, CaseSummary, EnvironmentSnapshot, HealthStatus, Job, ReportsComparisonRow } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -14,10 +14,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(body || `Error ${response.status}`);
+    let message = body || `Error ${response.status}`;
+
+    try {
+      const parsed = JSON.parse(body) as { detail?: string };
+      if (parsed?.detail) {
+        message = parsed.detail;
+      }
+    } catch {
+      // Keep raw text when response is not JSON.
+    }
+
+    throw new Error(message);
   }
 
   return response.json() as Promise<T>;
+}
+
+export async function getHealth(): Promise<HealthStatus> {
+  return request<HealthStatus>("/api/health");
+}
+
+export async function getEnvironment(): Promise<EnvironmentSnapshot> {
+  return request<EnvironmentSnapshot>("/api/environment");
 }
 
 export async function getCases(filters?: {

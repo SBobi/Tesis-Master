@@ -1,0 +1,38 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as no cached configuration is available for tasks: compileCommonMainKotlinMetadata
+Type-safe project accessors is an incubating feature.
+> Task :composeApp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared:metadataNativeMainProcessResources NO-SOURCE
+> Task :shared:metadataIosMainProcessResources NO-SOURCE
+> Task :shared:metadataAppleMainProcessResources NO-SOURCE
+> Task :shared:metadataCommonMainProcessResources NO-SOURCE
+> Task :composeApp:convertXmlValueResourcesForCommonMain
+> Task :composeApp:copyNonXmlValueResourcesForCommonMain NO-SOURCE
+> Task :shared:generateProjectStructureMetadata
+> Task :composeApp:prepareComposeResourcesTaskForCommonMain
+> Task :composeApp:generateExpectResourceCollectorsForCommonMain
+> Task :composeApp:generateComposeResClass
+> Task :composeApp:generateResourceAccessorsForCommonMain
+> Task :shared:commonizeNativeDistribution
+> Task :shared:transformCommonMainDependenciesMetadata
+> Task :shared:compileCommonMainKotlinMetadata FROM-CACHE
+> Task :shared:metadataCommonMainClasses UP-TO-DATE
+> Task :shared:allMetadataJar
+> Task :shared:transformNativeMainDependenciesMetadata
+> Task :shared:compileNativeMainKotlinMetadata NO-SOURCE
+> Task :shared:metadataNativeMainClasses UP-TO-DATE
+> Task :shared:transformAppleMainDependenciesMetadata
+> Task :shared:compileAppleMainKotlinMetadata NO-SOURCE
+> Task :shared:metadataAppleMainClasses UP-TO-DATE
+> Task :shared:transformIosMainDependenciesMetadata
+> Task :shared:compileIosMainKotlinMetadata FROM-CACHE
+> Task :shared:metadataIosMainClasses UP-TO-DATE
+> Task :shared:exportCommonSourceSetsMetadataLocationsForMetadataApiElements
+> Task :composeApp:transformCommonMainDependenciesMetadata
+> Task :composeApp:compileCommonMainKotlinMetadata SKIPPED
+
+BUILD SUCCESSFUL in 9s
+16 actionable tasks: 14 executed, 2 from cache
+Configuration cache entry stored.

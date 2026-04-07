@@ -141,15 +141,15 @@ function fileDisplayName(file: DiffFile): string {
 }
 
 function rowTone(kind: DiffRow["kind"]): string {
-  if (kind === "add") return "bg-[#e6ffec]";
-  if (kind === "remove") return "bg-[#ffebe9]";
-  return "bg-[#f6f8fa]";
+  if (kind === "add") return "bg-[var(--surface-low)]";
+  if (kind === "remove") return "bg-[var(--surface-ink)]";
+  return "bg-[var(--surface)]";
 }
 
 function markerTone(kind: DiffRow["kind"]): string {
-  if (kind === "add") return "text-[#1f883d]";
-  if (kind === "remove") return "text-[#cf222e]";
-  return "text-muted";
+  if (kind === "add") return "text-[var(--ink)]";
+  if (kind === "remove") return "text-[var(--muted)]";
+  return "text-[var(--muted)]";
 }
 
 function lineMarker(kind: DiffRow["kind"]): string {
@@ -158,10 +158,20 @@ function lineMarker(kind: DiffRow["kind"]): string {
   return " ";
 }
 
-export function UnifiedDiffViewer({ rawDiff }: { rawDiff: string | null | undefined }) {
+type UnifiedDiffViewerProps = {
+  rawDiff: string | null | undefined;
+  hideFileNavigation?: boolean;
+  hideFileHeader?: boolean;
+};
+
+export function UnifiedDiffViewer({
+  rawDiff,
+  hideFileNavigation = false,
+  hideFileHeader = false,
+}: UnifiedDiffViewerProps) {
   if (!rawDiff || !rawDiff.trim()) {
     return (
-      <p className="rounded-xl border border-[var(--color-border)] bg-white/75 px-3 py-2 text-sm text-muted">
+      <p className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--muted)]">
         No code diff is available for this case.
       </p>
     );
@@ -183,7 +193,7 @@ export function UnifiedDiffViewer({ rawDiff }: { rawDiff: string | null | undefi
 
   if (files.length === 0) {
     return (
-      <pre className="max-h-[420px] overflow-auto rounded-xl border border-[var(--color-border)] bg-[#1f1d1a] p-3 text-xs text-[#f5eee0]">
+      <pre className="max-h-[420px] overflow-auto rounded-xl border border-[var(--line)] bg-[var(--surface-low)] p-3 text-xs text-[var(--ink)]">
         {rawDiff}
       </pre>
     );
@@ -195,8 +205,8 @@ export function UnifiedDiffViewer({ rawDiff }: { rawDiff: string | null | undefi
 
   return (
     <div className="space-y-3">
-      {files.length > 1 ? (
-        <div className="rounded-xl border border-[var(--color-border)] bg-white/80 px-3 py-2">
+      {!hideFileNavigation && files.length > 1 ? (
+        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted">
               File {activeFileIndex + 1} of {files.length}
@@ -209,8 +219,8 @@ export function UnifiedDiffViewer({ rawDiff }: { rawDiff: string | null | undefi
                 disabled={!canGoPrevious}
                 className={`ring-focus rounded-full px-3 py-1 text-xs font-semibold transition ${
                   canGoPrevious
-                    ? "border border-[var(--color-border)] bg-white text-ink hover:bg-[var(--color-surface)]"
-                    : "cursor-not-allowed border border-[var(--color-border)] bg-white text-muted"
+                    ? "border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-low)]"
+                    : "cursor-not-allowed border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]"
                 }`}
               >
                 Previous file
@@ -222,8 +232,8 @@ export function UnifiedDiffViewer({ rawDiff }: { rawDiff: string | null | undefi
                 disabled={!canGoNext}
                 className={`ring-focus rounded-full px-3 py-1 text-xs font-semibold transition ${
                   canGoNext
-                    ? "border border-[var(--color-border)] bg-white text-ink hover:bg-[var(--color-surface)]"
-                    : "cursor-not-allowed border border-[var(--color-border)] bg-white text-muted"
+                    ? "border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-low)]"
+                    : "cursor-not-allowed border border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]"
                 }`}
               >
                 Next file
@@ -241,8 +251,8 @@ export function UnifiedDiffViewer({ rawDiff }: { rawDiff: string | null | undefi
                   onClick={() => setActiveFileIndex(index)}
                   className={`ring-focus max-w-[280px] rounded-full border px-3 py-1 text-xs font-semibold transition ${
                     isActive
-                      ? "border-[#2f7fb5]/50 bg-[#e6f1fb] text-[#1f5f8a]"
-                      : "border-[var(--color-border)] bg-white text-muted hover:bg-[var(--color-surface)]"
+                      ? "border-[var(--line)] bg-[var(--surface-low)] text-[var(--ink)]"
+                      : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--surface-low)]"
                   }`}
                   title={fileDisplayName(file)}
                 >
@@ -254,20 +264,22 @@ export function UnifiedDiffViewer({ rawDiff }: { rawDiff: string | null | undefi
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white">
-        <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-ink">{fileDisplayName(activeFile)}</p>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="rounded-full border border-[#df9d9d] bg-[#fdeaea] px-2 py-1 text-[#8f3434]">
-                -{activeFile.removed}
-              </span>
-              <span className="rounded-full border border-[#95c9a7] bg-[#e9f8ef] px-2 py-1 text-[#256648]">
-                +{activeFile.added}
-              </span>
+      <section className="overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)]">
+        {!hideFileHeader ? (
+          <div className="border-b border-[var(--line)] bg-[var(--surface-low)] px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-ink">{fileDisplayName(activeFile)}</p>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-[var(--muted)]">
+                  -{activeFile.removed}
+                </span>
+                <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-[var(--muted)]">
+                  +{activeFile.added}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="max-h-[360px] overflow-auto">
           <table className="w-full border-collapse text-[12px]">
@@ -275,14 +287,14 @@ export function UnifiedDiffViewer({ rawDiff }: { rawDiff: string | null | undefi
               {activeFile.rows.map((row, rowIndex) => (
                 <tr key={`${activeFile.key}-row-${rowIndex}`} className="align-top">
                   <td
-                    className={`w-10 border-r border-[var(--color-border)] px-2 py-1 text-right font-mono text-[11px] text-muted ${rowTone(
+                    className={`w-10 border-r border-[var(--line-quiet)] px-2 py-1 text-right font-mono text-[11px] text-[var(--muted)] ${rowTone(
                       row.kind,
                     )}`}
                   >
                     {row.oldNumber ?? ""}
                   </td>
                   <td
-                    className={`w-10 border-r border-[var(--color-border)] px-2 py-1 text-right font-mono text-[11px] text-muted ${rowTone(
+                    className={`w-10 border-r border-[var(--line-quiet)] px-2 py-1 text-right font-mono text-[11px] text-[var(--muted)] ${rowTone(
                       row.kind,
                     )}`}
                   >

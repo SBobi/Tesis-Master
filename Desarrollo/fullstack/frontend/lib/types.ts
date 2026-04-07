@@ -7,6 +7,7 @@ export type CaseStatus =
   | "VALIDATED"
   | "EXPLAINED"
   | "EVALUATED"
+  | "NO_ERRORS_TO_FIX"
   | "FAILED";
 
 export type ValidationStatus =
@@ -27,12 +28,17 @@ export interface Job {
   status: string;
   current_stage: string | null;
   command_preview: string | null;
+  params?: Record<string, unknown> | null;
   effective_params: Record<string, unknown> | null;
+  cancel_requested?: boolean;
+  result_summary?: Record<string, unknown> | null;
   log_path: string | null;
   error_message: string | null;
   queued_at: string;
   started_at: string | null;
   finished_at: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CaseSummary {
@@ -186,6 +192,7 @@ export interface CaseDetail {
       hit_at_3: number | null;
       hit_at_5: number | null;
       source_set_accuracy: number | null;
+      extra?: Record<string, unknown> | null;
       updated_at: string;
     }>;
   };
@@ -215,4 +222,54 @@ export interface ReportsComparisonRow {
   hit_at_3: number | null;
   hit_at_5: number | null;
   source_set_accuracy: number | null;
+}
+
+export interface HealthStatus {
+  ok: boolean;
+  service: string;
+  time: string;
+}
+
+export interface EnvironmentChecks {
+  api_database: boolean;
+  python_version: string;
+  python_ok: boolean;
+  git_available: boolean;
+  java_available: boolean;
+  android_sdk_available: boolean;
+  llm_provider_available: boolean;
+}
+
+export interface EnvironmentPaths {
+  java_home: string;
+  android_home: string;
+  android_sdk_root: string;
+  kmp_database_url: string;
+  kmp_artifact_base: string;
+  kmp_report_output_dir: string;
+  google_application_credentials: string;
+}
+
+export interface EnvironmentLlm {
+  provider: string;
+  model: string;
+  fake: boolean;
+  vertex_project: string;
+  vertex_location: string;
+}
+
+export interface EnvironmentDefaults {
+  run_before_after_timeout_s: number;
+  validate_timeout_s: number;
+  localize_top_k: number;
+  repair_top_k: number;
+  queue_default_timeout_s: number;
+}
+
+export interface EnvironmentSnapshot {
+  generated_at: string;
+  checks: EnvironmentChecks;
+  paths: EnvironmentPaths;
+  llm: EnvironmentLlm;
+  defaults: EnvironmentDefaults;
 }

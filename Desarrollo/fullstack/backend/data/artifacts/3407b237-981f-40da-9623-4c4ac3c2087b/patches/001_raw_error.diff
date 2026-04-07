@@ -1,0 +1,9 @@
+--- a/gradle/libs.versions.toml
++++ b/gradle/libs.versions.toml
+@@ -1,5 +1,5 @@
+ [versions]
+-kotlin = "1.9.23" # Assuming this was the previous value based on KLIB_ABI_HINT
++kotlin = "2.3.0"
+ 
+ [libraries]
+ ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }

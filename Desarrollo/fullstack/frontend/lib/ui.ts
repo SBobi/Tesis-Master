@@ -32,3 +32,51 @@ export function stageStatusTone(status: string): "neutral" | "success" | "warnin
   if (status === "NOT_RUN_ENVIRONMENT_UNAVAILABLE") return "warning";
   return "neutral";
 }
+
+export function caseStatusLabel(status: string): string {
+  switch (status) {
+    case "CREATED":
+      return "Created";
+    case "SHADOW_BUILT":
+      return "Shadow Built";
+    case "EXECUTED":
+      return "Executed";
+    case "LOCALIZED":
+      return "Localized";
+    case "PATCH_ATTEMPTED":
+      return "Patch Attempted";
+    case "VALIDATED":
+      return "Validated";
+    case "EXPLAINED":
+      return "Explained";
+    case "EVALUATED":
+      return "Evaluated";
+    case "NO_ERRORS_TO_FIX":
+      return "No Errors To Fix";
+    case "FAILED":
+      return "Failed";
+    default:
+      return status;
+  }
+}
+
+export function validationLabel(status: string): string {
+  switch (status) {
+    case "SUCCESS_REPOSITORY_LEVEL":
+      return "Success";
+    case "PARTIAL_SUCCESS":
+      return "Partial";
+    case "FAILED_BUILD":
+      return "Build Failed";
+    case "FAILED_TESTS":
+      return "Tests Failed";
+    case "NOT_RUN_ENVIRONMENT_UNAVAILABLE":
+      return "Unavailable";
+    case "NOT_RUN_YET":
+      return "Not Run";
+    case "INCONCLUSIVE":
+      return "Inconclusive";
+    default:
+      return status;
+  }
+}

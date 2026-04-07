@@ -1,0 +1,16 @@
+[04/07/26 15:16:44] INFO     Database engine created: localhost:5432/kmp_repair 
+[04/07/26 15:16:44] INFO     Rehydrated: Case 75969c60 [VALIDATED]              
+                             kmp-production-sample-impact-demo | io.insert-koin 
+                             4.1.0→4.2.0                                        
+[04/07/26 15:16:44] INFO     Calling ExplanationAgent (model=gemini-2.5-flash)  
+[04/07/26 15:16:52] INFO     ExplanationAgent call complete: tokens_in=901      
+                             tokens_out=353 latency=7.95s                       
+[04/07/26 15:16:52] INFO     Case 75969c60 explanation complete:                
+                             json=data/artifacts/75969c60-4dc1-44c2-af02-f7ed8ce
+                             df597/explanations/explanation.json                
+                             md=data/artifacts/75969c60-4dc1-44c2-af02-f7ed8cedf
+                             597/explanations/explanation.md tokens=901+353     
+Explanation generated (model=gemini-2.5-flash)
+  JSON    : data/artifacts/75969c60-4dc1-44c2-af02-f7ed8cedf597/explanations/explanation.json
+  Markdown: data/artifacts/75969c60-4dc1-44c2-af02-f7ed8cedf597/explanations/explanation.md
+  Tokens  : in=901 out=353

@@ -1,0 +1,18 @@
+[
+  {
+    "case_id": "3407b237-981f-40da-9623-4c4ac3c2087b",
+    "repair_mode": "iterative_agentic",
+    "case_status": "EVALUATED",
+    "repo_url": "https://github.com/estebancastelblanco/kmp-production-sample-impact-demo",
+    "pr_ref": "pull/1",
+    "update_class": "direct_library",
+    "bsr": 1.0,
+    "ctsr": 1.0,
+    "ffsr": 1.0,
+    "efr": 1.0,
+    "hit_at_1": null,
+    "hit_at_3": null,
+    "hit_at_5": null,
+    "source_set_accuracy": null
+  }
+]

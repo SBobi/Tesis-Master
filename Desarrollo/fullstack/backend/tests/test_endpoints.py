@@ -109,6 +109,49 @@ def test_health(client: TestClient) -> None:
     assert body["service"] == "kmp-repair-pipeline-web"
 
 
+def test_environment_snapshot(client: TestClient) -> None:
+    r = client.get("/api/environment")
+
+    assert r.status_code == 200
+    body = r.json()
+
+    assert "generated_at" in body
+    assert set(body.keys()) >= {"checks", "paths", "llm", "defaults"}
+
+    assert set(body["checks"].keys()) >= {
+        "api_database",
+        "python_version",
+        "python_ok",
+        "git_available",
+        "java_available",
+        "android_sdk_available",
+        "llm_provider_available",
+    }
+
+    assert set(body["paths"].keys()) >= {
+        "java_home",
+        "android_home",
+        "android_sdk_root",
+        "kmp_database_url",
+        "kmp_artifact_base",
+        "kmp_report_output_dir",
+        "google_application_credentials",
+    }
+
+    assert set(body["llm"].keys()) >= {
+        "provider",
+        "model",
+        "fake",
+        "vertex_project",
+        "vertex_location",
+    }
+
+    assert body["defaults"]["run_before_after_timeout_s"] == 600
+    assert body["defaults"]["validate_timeout_s"] == 600
+    assert body["defaults"]["localize_top_k"] == 10
+    assert body["defaults"]["repair_top_k"] == 5
+
+
 # ─── POST /api/cases ─────────────────────────────────────────────────────────
 
 

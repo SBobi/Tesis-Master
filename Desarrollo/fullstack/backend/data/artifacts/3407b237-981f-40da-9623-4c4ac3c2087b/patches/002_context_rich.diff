@@ -1,0 +1,11 @@
+--- a/gradle/libs.versions.toml
++++ b/gradle/libs.versions.toml
+@@ -2,7 +2,7 @@
+ agp = "8.10.1"
+ coreSplashscreen = "1.0.1"
+ kotlin = "2.2.0"
+-dependencyUpdates = "0.52.0"
++kotlin = "2.3.0"
+ kotlinx-serialization = "1.8.1"
+ kotlinx-coroutines = "1.10.2"
+ kotlinx-datetime = "0.6.2"

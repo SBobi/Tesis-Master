@@ -1,0 +1,5 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as configuration cache cannot be reused because file 'gradle/libs.versions.toml' has changed.
+[Incubating] Problems report is available at: file:///Users/sbobi/Desktop/Tesis-Master/Desarrollo/fullstack/backend/data/artifacts/3407b237-981f-40da-9623-4c4ac3c2087b/workspace/after/build/reports/problems/problems-report.html
+Configuration cache entry stored.

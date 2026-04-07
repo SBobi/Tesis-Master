@@ -7,6 +7,10 @@ canonical pipeline installed as an editable local dependency.
 from __future__ import annotations
 
 import json
+import os
+import platform
+import shutil
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,9 +47,25 @@ from .schemas import (
     RunStageRequest,
 )
 from .settings import get_settings
+from .stages import sanitize_stage_params
 
 # Ensure .env is loaded before app/settings are instantiated.
 load_project_env()
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _pick_first_env(*keys: str, default: str = "") -> str:
+    for key in keys:
+        value = os.environ.get(key)
+        if value:
+            return value
+    return default
 
 
 def get_db() -> Iterator[Session]:
@@ -79,6 +99,89 @@ def create_app() -> FastAPI:
             "ok": True,
             "service": "kmp-repair-pipeline-web",
             "time": datetime.now(timezone.utc).isoformat(),
+        }
+
+    @app.get("/api/environment")
+    def environment_snapshot(session: Session = Depends(get_db)) -> dict[str, Any]:
+        db_ok = True
+        try:
+            session.execute(select(1))
+        except Exception:
+            db_ok = False
+
+        python_version = platform.python_version()
+        python_ok = sys.version_info.major > 3 or (
+            sys.version_info.major == 3 and sys.version_info.minor >= 11
+        )
+
+        java_home = os.environ.get("JAVA_HOME", "").strip()
+        java_exe = shutil.which("java")
+        if not java_exe and java_home:
+            java_candidate = Path(java_home) / "bin" / "java"
+            if java_candidate.exists():
+                java_exe = str(java_candidate)
+        java_available = bool(java_exe)
+
+        android_home = os.environ.get("ANDROID_HOME", "").strip()
+        android_sdk_root = os.environ.get("ANDROID_SDK_ROOT", "").strip()
+        android_candidate = android_home or android_sdk_root
+        android_sdk_available = bool(android_candidate and Path(android_candidate).exists())
+
+        provider_aliases = {"claude": "anthropic", "gemini": "vertex"}
+        llm_provider_raw = os.environ.get("KMP_LLM_PROVIDER", "anthropic").strip().lower()
+        llm_provider = provider_aliases.get(llm_provider_raw, llm_provider_raw) or "anthropic"
+        llm_provider_available = llm_provider in {"anthropic", "vertex"}
+
+        llm_model = os.environ.get("KMP_LLM_MODEL", "").strip()
+
+        run_before_after_defaults = sanitize_stage_params("run-before-after", {})
+        validate_defaults = sanitize_stage_params("validate", {})
+        localize_defaults = sanitize_stage_params("localize", {})
+        repair_defaults = sanitize_stage_params("repair", {})
+
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "checks": {
+                "api_database": db_ok,
+                "python_version": python_version,
+                "python_ok": python_ok,
+                "git_available": shutil.which("git") is not None,
+                "java_available": java_available,
+                "android_sdk_available": android_sdk_available,
+                "llm_provider_available": llm_provider_available,
+            },
+            "paths": {
+                "java_home": java_home,
+                "android_home": android_home,
+                "android_sdk_root": android_sdk_root,
+                "kmp_database_url": os.environ.get("KMP_DATABASE_URL", "").strip(),
+                "kmp_artifact_base": str(settings.artifact_base),
+                "kmp_report_output_dir": str(settings.report_output_dir),
+                "google_application_credentials": os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip(),
+            },
+            "llm": {
+                "provider": llm_provider,
+                "model": llm_model,
+                "fake": _env_flag("KMP_LLM_FAKE", default=False),
+                "vertex_project": _pick_first_env(
+                    "KMP_VERTEX_PROJECT",
+                    "GCP_PROJECT_ID",
+                    "GOOGLE_CLOUD_PROJECT",
+                ),
+                "vertex_location": _pick_first_env(
+                    "KMP_VERTEX_LOCATION",
+                    "GEMINI_REGION",
+                    "GOOGLE_CLOUD_LOCATION",
+                    default="us-central1",
+                ),
+            },
+            "defaults": {
+                "run_before_after_timeout_s": run_before_after_defaults["timeout_s"],
+                "validate_timeout_s": validate_defaults["timeout_s"],
+                "localize_top_k": localize_defaults["top_k"],
+                "repair_top_k": repair_defaults["top_k"],
+                "queue_default_timeout_s": settings.queue_default_timeout_s,
+            },
         }
 
     @app.post("/api/cases")

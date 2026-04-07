@@ -34,6 +34,8 @@ class TestRepositoryRepo:
         repo = RepositoryRepo(db_session).get_or_create("https://github.com/example/repo")
         assert repo.id is not None
         assert repo.url == "https://github.com/example/repo"
+        assert repo.owner == "example"
+        assert repo.name == "repo"
 
     def test_get_or_create_idempotent(self, db_session) -> None:
         r = RepositoryRepo(db_session)

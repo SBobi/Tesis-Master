@@ -85,13 +85,19 @@ Open http://localhost:3000.
 | Route | Page | Purpose |
 |-------|------|---------|
 | `/` | Home | Hero + active pipeline status (SSE) + 3 recent cases + repair-mode cards |
-| `/process` | Process | Ingest PR URL, run pipeline, live console (SSE), 9-step process timeline |
+| `/process` | Process | Ingest PR URL, auto-select new ingested case in selector, run pipeline, live console (SSE), 9-step process timeline |
 | `/cases` | Cases | Full case listing with update-class filter presets |
 | `/cases/[caseId]` | Case Detail | Evidence timeline, patch diffs, validation matrix, agent logs |
 | `/results` | Results | Aggregated metrics comparison (D3 charts), CSV/JSON/MD export |
 | `/environment` | Environment | Runtime health checks + backend configuration snapshot |
 | `/about` | About | Static thesis framing (problem, contribution, methodology, scope) |
 | `/reports` | Redirect | Redirects to `/results` |
+
+### Process page ingest UX
+
+- `Ingest PR URL` keeps the user on `/process` (no auto-redirect to case detail).
+- After ingest succeeds, the new case is inserted at the top of the case selector and auto-selected.
+- Case selector labels prioritize `pr_title`; fallback is `owner/repo - PR #N`.
 
 ---
 

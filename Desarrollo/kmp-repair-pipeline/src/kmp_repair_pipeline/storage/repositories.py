@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -48,12 +49,37 @@ class RepositoryRepo:
     def __init__(self, session: Session) -> None:
         self._s = session
 
+    @staticmethod
+    def _parse_owner_and_name(url: str) -> tuple[str | None, str | None]:
+        parsed = urlparse(url)
+        host = (parsed.netloc or "").lower()
+        if host not in {"github.com", "www.github.com"}:
+            return None, None
+
+        parts = [segment for segment in parsed.path.split("/") if segment]
+        if len(parts) < 2:
+            return None, None
+
+        return parts[0], parts[1]
+
     def get_or_create(self, url: str) -> Repository:
+        owner, name = self._parse_owner_and_name(url)
+
         stmt = select(Repository).where(Repository.url == url)
         existing = self._s.scalars(stmt).first()
         if existing:
+            updated = False
+            if owner and not existing.owner:
+                existing.owner = owner
+                updated = True
+            if name and not existing.name:
+                existing.name = name
+                updated = True
+            if updated:
+                self._s.flush()
             return existing
-        repo = Repository(url=url)
+
+        repo = Repository(url=url, owner=owner, name=name)
         self._s.add(repo)
         self._s.flush()
         return repo

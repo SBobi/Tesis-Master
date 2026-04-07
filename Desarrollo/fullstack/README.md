@@ -92,7 +92,7 @@ environment variables, and troubleshooting guide.
 | Route | Purpose |
 |-------|---------|
 | `/` | Hero + active pipeline status (SSE) + recent cases |
-| `/process` | Ingest PR URL, run pipeline, live console |
+| `/process` | Ingest PR URL, auto-select newly ingested case, run pipeline, live console |
 | `/cases` | Full case listing with filters |
 | `/cases/[caseId]` | Evidence timeline, patch diffs, validation matrix |
 | `/results` | Aggregated metrics comparison + D3 charts + export |

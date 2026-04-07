@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { LiveJobConsole } from "@/components/LiveJobConsole";
@@ -147,9 +146,24 @@ function selectConsoleJob(detail: CaseDetail | null): Job | null {
 
 function caseOptionLabel(item: CaseSummary): string {
   if (item.event.pr_title && item.event.pr_title.trim().length > 0) return item.event.pr_title;
-  const owner = item.repository.owner || "unknown-owner";
-  const repo = item.repository.name || "unknown-repo";
-  const prRef = item.event.pr_ref || item.case_id;
+
+  let parsedOwner: string | undefined;
+  let parsedRepo: string | undefined;
+  try {
+    const parsed = new URL(item.repository.url);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    parsedOwner = parts[0];
+    parsedRepo = parts[1];
+  } catch {
+    parsedOwner = undefined;
+    parsedRepo = undefined;
+  }
+
+  const owner = item.repository.owner || parsedOwner || "unknown-owner";
+  const repo = item.repository.name || parsedRepo || "unknown-repo";
+  const prRefRaw = item.event.pr_ref?.trim() || shortId(item.case_id);
+  const prRefMatch = prRefRaw.match(/^pull\/(\d+)$/i);
+  const prRef = prRefMatch ? `PR #${prRefMatch[1]}` : prRefRaw;
   return `${owner}/${repo} - ${prRef}`;
 }
 
@@ -178,8 +192,6 @@ function extractRepairMode(job: Job | null): string | null {
 }
 
 export default function ProcessPage() {
-  const router = useRouter();
-
   const [prUrl, setPrUrl] = useState("");
   const [ingesting, setIngesting] = useState(false);
   const [ingestError, setIngestError] = useState<string | null>(null);
@@ -254,7 +266,7 @@ export default function ProcessPage() {
         const ordered = [...items].sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at));
         setPastCases(ordered);
         setSelectedPastCaseId((current) => {
-          if (current && ordered.some((item) => item.case_id === current)) return current;
+          if (current) return current;
           return "";
         });
       } catch {
@@ -417,7 +429,35 @@ export default function ProcessPage() {
     setIngestError(null);
     try {
       const created = await createCase(value);
-      router.push(`/cases/${created.case.case_id}`);
+
+      const createdCaseSummary: CaseSummary = {
+        case_id: created.case.case_id,
+        status: created.case.status,
+        created_at: created.case.created_at,
+        updated_at: created.case.updated_at,
+        repository: {
+          url: created.case.repository.url,
+          owner: created.case.repository.owner,
+          name: created.case.repository.name,
+        },
+        event: {
+          pr_ref: created.case.event.pr_ref,
+          pr_title: created.case.event.pr_title,
+          update_class: created.case.event.update_class,
+        },
+        latest_repair_mode: null,
+        latest_patch_status: null,
+        active_job: null,
+      };
+
+      setPastCases((current) => {
+        const next = current.filter((item) => item.case_id !== created.case.case_id);
+        return [createdCaseSummary, ...next];
+      });
+      setSelectedPastCaseId(created.case.case_id);
+      setSelectedCaseDetail(created);
+      setCaseDetailError(null);
+      setPrUrl("");
     } catch (err) {
       setIngestError(err instanceof Error ? err.message : "Could not ingest PR URL");
     } finally {
@@ -550,7 +590,7 @@ export default function ProcessPage() {
                 <option value="">No previous cases available</option>
               ) : (
                 <>
-                  <option value="">Selecciona un caso...</option>
+                  <option value="">Select a case...</option>
                   {pastCases.map((item) => (
                     <option key={item.case_id} value={item.case_id}>
                       {caseOptionLabel(item)}

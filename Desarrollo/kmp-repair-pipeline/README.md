@@ -96,6 +96,13 @@ The key insight is that KMP repositories are structurally more demanding than si
 
 ---
 
+Stage 1 ingest persists canonical GitHub metadata so downstream UIs can render
+stable labels without guesswork:
+- repository owner and name are derived from the PR URL repository path,
+- `dependency_events.pr_ref` and `dependency_events.pr_title` are stored from PR metadata.
+
+---
+
 ## Typed Case Bundle
 
 All pipeline state is persisted in a typed Case Bundle — never in free-form conversational memory. Agents read from and write to this bundle.

@@ -135,6 +135,7 @@ def _ingest(
         repository_id=repo_row.id,
         update_class=overall_class.value,
         pr_ref=pr.pr_ref,
+        pr_title=pr.title,
         raw_diff=raw_diff,
         source=detection_source,
     )

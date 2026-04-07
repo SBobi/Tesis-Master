@@ -106,13 +106,54 @@ resolve_python() {
 }
 
 run_db_migrations() {
-  log "Aplicando migraciones Alembic en la base compartida"
-  if ! (
-    cd "$PIPELINE_DIR"
-    "$PYTHON_BIN" -m alembic upgrade head > /tmp/kmp_stack_migrate.log 2>&1
-  ); then
+  local db_wait_retries="${DB_WAIT_RETRIES:-40}"
+  local db_wait_delay="${DB_WAIT_DELAY_S:-0.5}"
+  local migrate_retries="${MIGRATION_RETRIES:-6}"
+  local migrate_delay="${MIGRATION_RETRY_DELAY_S:-1.0}"
+  local attempt
+
+  log "Esperando disponibilidad de la base de datos"
+  for attempt in $(seq 1 "$db_wait_retries"); do
+    if "$PYTHON_BIN" - <<'PY' >/dev/null 2>&1
+import os
+import psycopg2
+
+conn = psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=2)
+conn.close()
+PY
+    then
+      break
+    fi
+
+    if [[ "$attempt" == "$db_wait_retries" ]]; then
+      fail "La base de datos no respondió tras ${db_wait_retries} intentos"
+    fi
+    sleep "$db_wait_delay"
+  done
+
+  for attempt in $(seq 1 "$migrate_retries"); do
+    log "Aplicando migraciones Alembic en la base compartida (intento ${attempt}/${migrate_retries})"
+    if (
+      cd "$PIPELINE_DIR"
+      "$PYTHON_BIN" -m alembic upgrade head > /tmp/kmp_stack_migrate.log 2>&1
+    ); then
+      return
+    fi
+
+    if [[ "$attempt" == "$migrate_retries" ]]; then
+      break
+    fi
+
+    if grep -Eiq "OperationalError|connection to server .* failed|server closed the connection unexpectedly|Connection refused|could not connect" /tmp/kmp_stack_migrate.log; then
+      log "La base de datos aún está inicializando; reintentando en ${migrate_delay}s"
+      sleep "$migrate_delay"
+      continue
+    fi
+
     fail "Falló alembic upgrade head (ver /tmp/kmp_stack_migrate.log)"
-  fi
+  done
+
+  fail "Falló alembic upgrade head tras ${migrate_retries} intentos (ver /tmp/kmp_stack_migrate.log)"
 }
 
 wait_for_api() {

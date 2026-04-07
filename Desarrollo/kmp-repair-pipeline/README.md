@@ -181,6 +181,7 @@ repositories
 c4beede9862d  initial schema (16 tables)
 a1b2c3d4e5f6  add pr_title to dependency_events
 1c03c4a3181a  add required_kotlin_version to error_observations
+d7e8f9a0b1c2  add symbol_name to error_observations + efr_normalized to evaluation_metrics
 ```
 
 ---
@@ -190,8 +191,11 @@ a1b2c3d4e5f6  add pr_title to dependency_events
 ```
 CREATED → SHADOW_BUILT → EXECUTED → LOCALIZED → PATCH_ATTEMPTED
        → VALIDATED → EXPLAINED → EVALUATED
+       EXECUTED → NO_ERRORS_TO_FIX → EVALUATED  (non-breaking update: after compiles with 0 errors)
        (any stage may transition to FAILED on unrecoverable error)
 ```
+
+`NO_ERRORS_TO_FIX` is set by `run-before-after` when the after-state compiles with 0 compiler errors. The repair, validate, and explain phases are skipped; `metrics` auto-scores all four baseline modes BSR=CTSR=FFSR=1.0.
 
 ---
 
@@ -302,7 +306,7 @@ Metrics are computed per `(case_id, repair_mode)` and upserted to `evaluation_me
 | `iterative_agentic` | Same as context_rich + previous-attempt feedback | 4 | Retry loop with rejection guidance |
 | `full_thesis` | Full Case Bundle evidence + all previous attempts | 5 | Maximum context; thesis primary baseline |
 
-All modes share the same retry loop: stop as soon as a patch applies. Between modes, the workspace is reset (`git checkout -- . && git clean -fd`). Between retry attempts within a mode, the workspace is also reset.
+All modes share the same retry loop with in-loop validation: after each APPLIED patch, `validate()` is called immediately. If VALIDATED, the loop exits. If REJECTED with progress (fewer errors remain), remaining errors are stored in `patch_attempt.retry_reason` and surfaced in the next repair prompt; the loop continues. If REJECTED with no progress, the mode stops. Between modes, the workspace is reset (`git checkout -- . && git clean -fd`). Between retry attempts within a mode, the workspace is also reset.
 
 Run all four:
 ```bash
@@ -378,6 +382,20 @@ source scripts/bootstrap_env.sh
 # Or manually load .env (also sets JAVA_HOME):
 export $(grep -v '^#' .env | xargs)
 ```
+
+### Running the Full Pipeline (One Case)
+
+`scripts/run_e2e.sh` runs phases 6–13 end-to-end for a single repair case:
+
+```bash
+# Normal run (requires case to be already built via build-case)
+./scripts/run_e2e.sh <case_id>
+
+# Soft-reset first: deletes existing execution_runs, resets status to SHADOW_BUILT, re-runs all phases
+./scripts/run_e2e.sh <case_id> --fresh
+```
+
+The script auto-detects the correct Python interpreter from the `kmp-repair` shebang, loads `.env`, validates `JAVA_HOME`, checks status after each phase, and handles the `NO_ERRORS_TO_FIX` shortcut (jumps directly to metrics if after-state already compiles cleanly).
 
 > **Critical**: The Kotlin 2.x compiler crashes on Java 25 with `IllegalArgumentException: 25.0.1`.
 > Java 21 (Temurin) is required. See [Java version requirement](#java-version-requirement).
@@ -460,6 +478,7 @@ kmp-repair build-case <case_id>
 # Run Gradle before and after the update, capture errors
 # Targets detected from environment; unavailable → NOT_RUN_ENVIRONMENT_UNAVAILABLE
 kmp-repair run-before-after <case_id> [--target shared --target android --target ios] [--timeout 600]
+kmp-repair run-before-after <case_id> --fresh     # soft-reset: delete existing execution_runs first
 ```
 
 ### Stage 3 — Structural Analysis + Localization
@@ -551,7 +570,8 @@ kmp-repair detect-changes  # compare two TOML files for version changes (diff)
 kmp-repair-pipeline/
 ├── .python-version              Python 3.12 (pyenv/mise pin)
 ├── scripts/
-│   └── bootstrap_env.sh         Env auto-detection: JAVA_HOME, ANDROID_HOME, GCP creds
+│   ├── bootstrap_env.sh         Env auto-detection: JAVA_HOME, ANDROID_HOME, GCP creds
+│   └── run_e2e.sh               Full end-to-end pipeline runner (phases 6–13) for one case
 ├── src/kmp_repair_pipeline/
 │   ├── cli/
 │   │   └── main.py              Click entry point — 20+ commands

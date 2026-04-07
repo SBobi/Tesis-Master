@@ -133,6 +133,7 @@ c4beede9862d  initial schema (16 tables)
 a1b2c3d4e5f6  add pr_title to dependency_events
 1c03c4a3181a  add required_kotlin_version to error_observations
 d7e8f9a0b1c2  add symbol_name to error_observations + efr_normalized to evaluation_metrics
+(always run `alembic upgrade head` after git pull)
 ```
 
 ---
@@ -278,7 +279,7 @@ kmp-repair report --format all
 kmp-repair doctor          # check DB, artifacts, environment
 
 # Tests
-pytest tests/unit/          # 310 tests, no DB required
+pytest tests/unit/          # 353 tests, no DB required
 pytest tests/integration/   # needs Docker
 ```
 
@@ -305,7 +306,7 @@ src/kmp_repair_pipeline/
   reporting/       — CSV / JSON / Markdown report export
   utils/           — llm_provider, logging, hashing, JSON I/O
 migrations/        — Alembic migration files
-scripts/           — bootstrap_env.sh (env auto-detection)
+scripts/           — bootstrap_env.sh (env auto-detection), run_e2e.sh (full e2e pipeline runner)
 tests/
   unit/            — 310 passing tests (no network, no Docker)
   integration/     — DB schema + bundle rehydration (requires Docker)

@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Play API (Python 3.12 + Java 21)",
+      "type": "python",
+      "request": "launch",
+      "module": "kmp_repair_pipeline.webapi.app",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "JAVA_HOME": "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home",
+        "PATH": "/opt/homebrew/opt/python@3.12/bin:/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home/bin:${env:PATH}"
+      }
+    },
+    {
+      "name": "Play Worker (Python 3.12 + Java 21)",
+      "type": "python",
+      "request": "launch",
+      "module": "kmp_repair_pipeline.webapi.worker",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src",
+        "JAVA_HOME": "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home",
+        "PATH": "/opt/homebrew/opt/python@3.12/bin:/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home/bin:${env:PATH}"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Play API + Worker (Project Runtime)",
+      "configurations": [
+        "Play API (Python 3.12 + Java 21)",
+        "Play Worker (Python 3.12 + Java 21)"
+      ],
+      "stopAll": true
+    }
+  ]
+}

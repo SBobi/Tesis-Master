@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kmp-repair-pipeline"
+version = "0.1.0"
+description = "Multi-agent pipeline to repair breaking changes caused by dependency updates in Kotlin Multiplatform"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+dependencies = [
+    # CLI
+    "click>=8.1",
+    # Data validation and serialization
+    "pydantic>=2.0",
+    # Configuration
+    "pyyaml>=6.0",
+    # Kotlin parsing
+    "tree-sitter>=0.21,<0.24",
+    "tree-sitter-kotlin>=0.1",
+    # Terminal output
+    "rich>=13.0",
+    # Database (added Phase 2)
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg2-binary>=2.9",
+    # LLM provider (added Phase 9)
+    "anthropic>=0.25",
+    "google-genai>=0.8",
+    # HTTP for GitHub API calls
+    "httpx>=0.27",
+    # Web API
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    # Queue and realtime infra
+    "redis>=5.0",
+    "rq>=1.16,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+kmp-repair = "kmp_repair_pipeline.cli.main:main"
+kmp-repair-api = "kmp_repair_pipeline.webapi.app:run"
+kmp-repair-worker = "kmp_repair_pipeline.webapi.worker:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["src/kmp_repair_pipeline"]
+omit = ["*/tests/*"]

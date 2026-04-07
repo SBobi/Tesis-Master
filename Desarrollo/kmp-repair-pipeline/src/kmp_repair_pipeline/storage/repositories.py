@@ -242,27 +242,52 @@ class ExecutionRunRepo:
         """Delete all execution_runs (and cascading task_results + error_observations)
         for a case.  Used by ``--fresh`` to reset execution evidence before a re-run.
 
+        Deletion order (respects FK constraints):
+          1. error_observations (FK → task_results)
+          2. task_results (FK → execution_runs)
+          3. validation_runs.execution_run_id set to NULL (nullable FK → execution_runs)
+          4. execution_runs
+
         Returns the number of execution_run rows deleted.
         """
-        from ..storage.models import ErrorObservation as EOModel, TaskResult as TRModel
+        from ..storage.models import (
+            ErrorObservation as EOModel,
+            TaskResult as TRModel,
+            ValidationRun as VRModel,
+        )
         runs = self.list_for_case(repair_case_id)
-        deleted = 0
+        if not runs:
+            return 0
+
+        run_ids = [r.id for r in runs]
+
+        # 1. Delete error_observations via task_results
         for run in runs:
-            # Delete error_observations linked via task_results
-            task_stmt = select(TRModel).where(TRModel.execution_run_id == run.id)
-            task_rows = list(self._s.scalars(task_stmt).all())
-            for tr in task_rows:
-                self._s.execute(
-                    EOModel.__table__.delete().where(
-                        EOModel.task_result_id == tr.id
+            with self._s.no_autoflush:
+                task_stmt = select(TRModel).where(TRModel.execution_run_id == run.id)
+                task_rows = list(self._s.scalars(task_stmt).all())
+                for tr in task_rows:
+                    self._s.execute(
+                        EOModel.__table__.delete().where(
+                            EOModel.task_result_id == tr.id
+                        )
                     )
-                )
-            for tr in task_rows:
-                self._s.delete(tr)
+                for tr in task_rows:
+                    self._s.delete(tr)
+
+        # 2. Null out the optional FK in validation_runs so we can delete the runs
+        self._s.execute(
+            VRModel.__table__.update()
+            .where(VRModel.__table__.c.execution_run_id.in_(run_ids))
+            .values(execution_run_id=None)
+        )
+
+        # 3. Delete execution_runs
+        for run in runs:
             self._s.delete(run)
-            deleted += 1
+
         self._s.flush()
-        return deleted
+        return len(runs)
 
 
 # ---------------------------------------------------------------------------

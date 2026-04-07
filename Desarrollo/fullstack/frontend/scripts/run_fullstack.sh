@@ -8,6 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BACKEND_DIR="$(cd "$FRONTEND_DIR/../backend" && pwd)"
+PIPELINE_DIR="$(cd "$FRONTEND_DIR/../../kmp-repair-pipeline" && pwd)"
 
 FRONT_PORT="${FRONT_PORT:-3000}"
 BACK_PORT="${BACK_PORT:-8000}"
@@ -28,6 +29,25 @@ log() {
 fail() {
   echo "[stack][error] $*" >&2
   exit 1
+}
+
+load_backend_env() {
+  local env_file="$BACKEND_DIR/.env"
+
+  [[ -f "$env_file" ]] || fail "No existe $env_file. Crea el archivo desde .env.example"
+
+  set -a
+  # shellcheck source=/dev/null
+  source "$env_file"
+  set +a
+
+  if [[ -z "${KMP_DATABASE_URL:-}" && -z "${DATABASE_URL:-}" ]]; then
+    fail "Falta KMP_DATABASE_URL o DATABASE_URL en $env_file"
+  fi
+
+  if [[ -z "${DATABASE_URL:-}" && -n "${KMP_DATABASE_URL:-}" ]]; then
+    export DATABASE_URL="$KMP_DATABASE_URL"
+  fi
 }
 
 resolve_python() {
@@ -57,13 +77,42 @@ resolve_python() {
 
   for candidate in "${candidates[@]}"; do
     [[ -x "$candidate" ]] || continue
-    if "$candidate" -c "import kmp_repair_webapi" >/dev/null 2>&1; then
+    if "$candidate" -c "import kmp_repair_pipeline, kmp_repair_webapi" >/dev/null 2>&1; then
       PYTHON_BIN="$candidate"
       return
     fi
   done
 
-  fail "No encontré un Python con kmp_repair_webapi. Instala deps en backend/.venv o exporta KMP_PYTHON_BIN"
+  local bootstrap_python="${candidates[0]:-}"
+  [[ -n "$bootstrap_python" ]] || fail "No encontré ejecutable Python disponible en PATH"
+
+  log "No encontré runtime con paquetes del stack. Instalando dependencias editables..."
+  if ! "$bootstrap_python" -m pip install -e "$PIPELINE_DIR" > /tmp/kmp_stack_pip.log 2>&1; then
+    fail "Falló instalación de pipeline con $bootstrap_python (ver /tmp/kmp_stack_pip.log)"
+  fi
+  if ! "$bootstrap_python" -m pip install -e "$BACKEND_DIR" >> /tmp/kmp_stack_pip.log 2>&1; then
+    fail "Falló instalación de backend con $bootstrap_python (ver /tmp/kmp_stack_pip.log)"
+  fi
+
+  for candidate in "${candidates[@]}"; do
+    [[ -x "$candidate" ]] || continue
+    if "$candidate" -c "import kmp_repair_pipeline, kmp_repair_webapi" >/dev/null 2>&1; then
+      PYTHON_BIN="$candidate"
+      return
+    fi
+  done
+
+  fail "No encontré un Python con kmp_repair_pipeline y kmp_repair_webapi. Exporta KMP_PYTHON_BIN"
+}
+
+run_db_migrations() {
+  log "Aplicando migraciones Alembic en la base compartida"
+  if ! (
+    cd "$PIPELINE_DIR"
+    "$PYTHON_BIN" -m alembic upgrade head > /tmp/kmp_stack_migrate.log 2>&1
+  ); then
+    fail "Falló alembic upgrade head (ver /tmp/kmp_stack_migrate.log)"
+  fi
 }
 
 wait_for_api() {
@@ -109,6 +158,7 @@ trap cleanup EXIT INT TERM
 
 log "Frontend: $FRONTEND_DIR"
 log "Backend:  $BACKEND_DIR"
+log "Pipeline: $PIPELINE_DIR"
 log "API URL:  $API_BASE_URL"
 
 if [[ "$START_INFRA" == "1" ]]; then
@@ -127,10 +177,12 @@ if [[ "$START_INFRA" == "1" ]]; then
   fi
 fi
 
+load_backend_env
 resolve_python
+run_db_migrations
 
-if ! "$PYTHON_BIN" -c "import kmp_repair_webapi" >/dev/null 2>&1; then
-  fail "El runtime $PYTHON_BIN no tiene kmp_repair_webapi instalado. Ejecuta: pip install -e $BACKEND_DIR"
+if ! "$PYTHON_BIN" -c "import kmp_repair_pipeline, kmp_repair_webapi" >/dev/null 2>&1; then
+  fail "El runtime $PYTHON_BIN no tiene stack completo instalado"
 fi
 
 if curl -sf "$API_BASE_URL/api/health" >/dev/null 2>&1; then
